@@ -1,0 +1,7 @@
+[gd_scene format=3 uid="uid://hh8u8a5llyha"]
+
+[node name="battle" type="Control" unique_id=1249455180]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0

@@ -1,0 +1,7 @@
+[gd_scene format=3 uid="uid://btekxi633f36x"]
+
+[node name="card_view" type="Control" unique_id=2071968896]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0

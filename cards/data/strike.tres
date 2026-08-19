@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="CardDefinition" format=3 uid="uid://dkccfhg2cvceb"]
+
+[ext_resource type="Script" uid="uid://drcw0copl04t2" path="res://cards/card_definition.gd" id="1_yjc4p"]
+
+[resource]
+script = ExtResource("1_yjc4p")
+card_id = "strike"
+card_name = "打击"
+description = "造成6点伤害"
+target_type = 1
+base_energy_cost = 1
+base_damage_amount = 6
+metadata/_custom_type_script = "uid://drcw0copl04t2"

@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="CardDefinition" format=3 uid="uid://bvu4nx4814o1r"]
+
+[ext_resource type="Script" uid="uid://drcw0copl04t2" path="res://cards/card_definition.gd" id="1_wwom3"]
+
+[resource]
+script = ExtResource("1_wwom3")
+card_id = "defend"
+card_name = "防御"
+description = "获得5点格挡。"
+card_type = 1
+base_energy_cost = 1
+base_block_amount = 5
+metadata/_custom_type_script = "uid://drcw0copl04t2"
