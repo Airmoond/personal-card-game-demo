@@ -1,5 +1,6 @@
 [gd_resource type="Resource" script_class="CardDefinition" format=3 uid="uid://dkccfhg2cvceb"]
 
+[ext_resource type="Texture2D" uid="uid://dx3hmlg1cox4h" path="res://assets/images/strike.png" id="1_qirlp"]
 [ext_resource type="Script" uid="uid://drcw0copl04t2" path="res://cards/card_definition.gd" id="1_yjc4p"]
 
 [resource]
@@ -10,4 +11,5 @@ description = "造成6点伤害"
 target_type = 1
 base_energy_cost = 1
 base_damage_amount = 6
+artwork = ExtResource("1_qirlp")
 metadata/_custom_type_script = "uid://drcw0copl04t2"

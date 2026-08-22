@@ -1,7 +1,51 @@
 [gd_scene format=3 uid="uid://d1fvxikrg0afv"]
 
+[ext_resource type="Script" uid="uid://c5600i0aq70v0" path="res://combatants/combatant_view.gd" id="1_x77dk"]
+
 [node name="combatant_view" type="Control" unique_id=1860343574]
+custom_minimum_size = Vector2(240, 260)
 layout_mode = 3
 anchors_preset = 0
 offset_right = 40.0
 offset_bottom = 40.0
+script = ExtResource("1_x77dk")
+
+[node name="main_layout" type="VBoxContainer" parent="." unique_id=46169126]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="artwork" type="TextureRect" parent="main_layout" unique_id=1414151062]
+custom_minimum_size = Vector2(200, 100)
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="name_label" type="Label" parent="main_layout" unique_id=1319241911]
+layout_mode = 2
+text = "角色名称"
+horizontal_alignment = 1
+
+[node name="health_bar" type="ProgressBar" parent="main_layout" unique_id=1376846238]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+value = 100.0
+show_percentage = false
+
+[node name="health_label" type="Label" parent="main_layout" unique_id=1095016368]
+layout_mode = 2
+text = "100 / 100"
+horizontal_alignment = 1
+
+[node name="block_label" type="Label" parent="main_layout" unique_id=853823507]
+layout_mode = 2
+text = "格挡：0"
+horizontal_alignment = 1
+
+[node name="enemy_intent_label" type="Label" parent="main_layout" unique_id=1395971976]
+layout_mode = 2
+text = "意图：未知"
+horizontal_alignment = 1

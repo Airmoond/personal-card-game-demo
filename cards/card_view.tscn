@@ -1,7 +1,86 @@
 [gd_scene format=3 uid="uid://btekxi633f36x"]
 
+[ext_resource type="Script" uid="uid://cf4x2ya18rpub" path="res://cards/card_view.gd" id="1_cuaw8"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_r16dr"]
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.31761202, 0.88663423, 0.9769295, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_cuaw8"]
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.24924722, 0.8907638, 0.99184376, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_467wm"]
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.18638605, 0.9083509, 0.90540904, 1)
+
 [node name="card_view" type="Control" unique_id=2071968896]
+custom_minimum_size = Vector2(140, 200)
 layout_mode = 3
 anchors_preset = 0
 offset_right = 40.0
 offset_bottom = 40.0
+mouse_default_cursor_shape = 2
+script = ExtResource("1_cuaw8")
+
+[node name="card_background" type="Panel" parent="." unique_id=462553162]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+metadata/_edit_lock_ = true
+
+[node name="cost_label" type="Label" parent="." unique_id=85122010]
+layout_mode = 0
+offset_left = 2.0
+offset_top = 2.0
+offset_right = 24.0
+offset_bottom = 29.0
+theme_override_styles/normal = SubResource("StyleBoxFlat_r16dr")
+text = "1"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="name_label" type="Label" parent="." unique_id=408577470]
+layout_mode = 0
+offset_left = 30.0
+offset_top = 2.0
+offset_right = 110.0
+offset_bottom = 29.0
+theme_override_styles/normal = SubResource("StyleBoxFlat_cuaw8")
+text = "名称"
+horizontal_alignment = 1
+
+[node name="artwork" type="TextureRect" parent="." unique_id=1387413338]
+layout_mode = 0
+offset_left = 8.0
+offset_top = 37.0
+offset_right = 132.0
+offset_bottom = 117.0
+expand_mode = 1
+stretch_mode = 6
+
+[node name="description_label" type="RichTextLabel" parent="." unique_id=1124283368]
+layout_mode = 0
+offset_left = 8.0
+offset_top = 123.0
+offset_right = 132.0
+offset_bottom = 192.0
+mouse_filter = 2
+theme_override_styles/normal = SubResource("StyleBoxFlat_467wm")
+text = "卡牌效果"
+scroll_active = false
+horizontal_alignment = 1
+vertical_alignment = 1
