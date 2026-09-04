@@ -5,6 +5,16 @@
 extends Control
 class_name CardView
 
+## 卡牌可以使用时采用的正常显示颜色。
+##
+## Color.WHITE不会改变场景原本的颜色与透明度。
+const PLAYABLE_MODULATE:Color = Color.WHITE;
+
+## 卡牌当前不可使用时采用的灰暗半透明显示颜色。
+##
+## 该颜色只提供视觉反馈，不代表CardView拥有或执行出牌合法性规则。
+const UNPLAYABLE_MODULATE:Color = Color(0.55,0.55,0.55,0.65);
+
 ## 玩家左键点击一张已经成功绑定的卡牌时发出。
 ##
 ## selected_card是被点击界面当前绑定的CardInstance。
@@ -61,6 +71,18 @@ func refresh_card_view()->void:
 	name_label.text = card_instance.definition.card_name;
 	artwork.texture = card_instance.definition.artwork;
 	description_label.text = card_instance.definition.description;
+
+
+## 根据控制器提供的合法性结果切换卡牌可用或不可用的显示外观。
+##
+## is_playable为true时恢复正常颜色；为false时显示为灰暗半透明状态。
+## 该方法只修改当前CardView的modulate，不读取能量或回合，不修改CardInstance，
+## 也不阻止点击和发出card_selected信号；最终出牌合法性仍由BattleController判断。
+func set_playable_visual(is_playable:bool)->void:
+	if is_playable:#控制器已经确认当前卡牌在此刻可以尝试使用
+		modulate = PLAYABLE_MODULATE;#恢复场景原有颜色与完全不透明的外观
+		return;#正常外观已经设置完成，无需继续处理不可用分支
+	modulate = UNPLAYABLE_MODULATE;#用灰暗半透明外观提示当前卡牌不可使用
 	
 ## 接收发生在当前卡牌界面范围内的鼠标输入。
 ##

@@ -1,0 +1,134 @@
+## 显示一张静态奖励卡牌，并报告玩家对它的选择。
+##
+## RewardCardView直接读取CardDefinition中的名称、基础费用、原画和描述。
+## 它属于视图与输入层，不创建CardInstance、不执行卡牌效果，也不把卡牌加入RunState。
+class_name RewardCardView
+extends Button
+
+
+## 奖励卡允许玩家选择时使用的正常显示颜色。
+##
+## Color.WHITE不会改变根Button及其名称、费用、原画和描述子节点的原始颜色。
+const INTERACTABLE_MODULATE:Color = Color.WHITE
+
+
+## 奖励卡当前不可选择时使用的灰暗半透明颜色。
+##
+## 该颜色通过根节点的modulate同时影响卡牌背景及全部显示子节点，
+## 让玩家能够直观看出卡牌现在不能继续选择。
+const DISABLED_MODULATE:Color = Color(0.65,0.65,0.65,0.8)
+
+
+## 玩家首次点击当前已经绑定且允许交互的奖励卡时发出。
+##
+## card_definition是当前组件显示的只读卡牌定义；
+## 该信号只报告玩家选择，不代表奖励已经加入本局牌组。
+signal reward_card_selected(card_definition:CardDefinition)
+
+
+## 当前组件正在显示的静态卡牌定义。
+##
+## 通过setup完成绑定。该资源只能读取，不能在奖励页面中修改其任何字段。
+var card_definition:CardDefinition
+
+
+## 当前这次setup之后是否已经报告过选择。
+##
+## 防止页面切换完成前快速重复点击同一张奖励卡。
+var _selection_reported:bool = false
+
+
+## 显示卡牌基础能量费用。
+@onready var cost_label:Label = $cost_label
+
+
+## 显示卡牌名称。
+@onready var name_label:Label = $name_label
+
+
+## 显示卡牌静态原画。
+@onready var artwork:TextureRect = $artwork
+
+
+## 显示卡牌效果说明。
+@onready var description_label:RichTextLabel = $description_label
+
+
+## 连接根Button的点击信号，并保持组件初始不可交互。
+func _ready()->void:
+	pressed.connect(_on_pressed);#把根Button的点击统一交给当前组件的私有处理方法
+	set_interactable(false);#绑定CardDefinition前保持禁用，并同步显示灰暗外观
+
+
+## 使用一份静态CardDefinition设置当前奖励卡组件。
+func setup(new_card_definition:CardDefinition)->bool:
+	if new_card_definition == null:#空引用无法提供卡牌名称、费用、原画和描述
+		push_error("需要设置的奖励卡牌定义为空");#报告外层奖励页面没有传入实际卡牌资源
+		return false;#在验证通过前不覆盖当前组件原有的card_definition绑定
+	if new_card_definition.is_invalid():#卡牌ID、名称、费用、描述和效果必须完整合法
+		push_error("需要设置的奖励卡牌定义无效");#补充奖励卡View层的错误上下文
+		return false;#非法静态资源不能成为当前奖励卡的显示与点击来源
+	
+	card_definition=new_card_definition;
+	_selection_reported=false;
+	_refresh_visual();
+	set_interactable(false);
+	return true;#静态定义已经成功绑定，界面内容与初始交互状态也已完成刷新
+
+
+## 根据外层奖励页面的决定设置当前卡牌是否允许选择。
+##
+## 只有enabled为true、组件已经绑定CardDefinition，并且本次setup之后尚未报告过
+## 选择时才会启用根Button；其他情况统一禁用。方法还会同步更新根节点的modulate，
+## 使费用、名称、原画和描述与交互状态保持一致。它不修改CardDefinition，
+## 也不代表玩家已经获得这张卡牌。
+func set_interactable(enabled:bool)->void:
+	var can_interact:bool = (
+		enabled
+		and card_definition != null
+		and not _selection_reported
+	);#外层授权、有效绑定和本轮尚未选择必须同时满足
+	disabled = not can_interact;#Button使用disabled表达是否拒绝玩家输入和采用哪个主题状态
+	modulate = (
+		INTERACTABLE_MODULATE
+		if can_interact
+		else DISABLED_MODULATE
+	);#通过根节点颜色让背景、文字和原画同步呈现正常或灰暗状态
+
+
+## 根据当前绑定的CardDefinition刷新卡牌显示。
+##
+## 尚未绑定卡牌或当前定义无效时推送错误并立即结束。绑定合法时，将静态定义中的
+## 基础费用、名称、原画和描述分别写入对应界面节点。该方法只更新画面，不创建
+## CardInstance、不执行卡牌效果，也不修改CardDefinition中的任何字段。
+func _refresh_visual()->void:
+	if card_definition == null:#没有静态定义时无法取得任何可信的卡牌显示数据
+		push_error("尚未绑定奖励卡牌定义，无法刷新奖励卡界面");#报告setup尚未成功完成
+		return;#保持当前界面内容不变
+	if card_definition.is_invalid():#防御性检查当前绑定是否仍满足卡牌静态规则
+		push_error("当前奖励卡牌定义无效，无法刷新奖励卡界面");#补充奖励卡View层的错误上下文
+		return;#非法定义不能覆盖当前显示内容
+
+	cost_label.text = str(card_definition.base_energy_cost);#整数费用转换为Label需要的字符串
+	name_label.text = card_definition.card_name;#显示面向玩家的静态卡牌名称
+	artwork.texture = card_definition.artwork;#原画允许为空，此时TextureRect保持无纹理显示
+	description_label.text = card_definition.description;#显示静态卡牌效果说明，不解释或执行效果
+
+
+## 接收根Button的首次有效点击并报告选择。
+##
+## 尚未绑定卡牌时推送错误；按钮不可交互或本次setup已经报告过选择时忽略输入。
+## 首次有效点击会先保存防重复状态并禁用自身，再发出reward_card_selected信号。
+## 该方法只报告玩家意图，不调用RunState.add_card，也不修改静态卡牌资源。
+func _on_pressed()->void:
+	if card_definition == null:#空绑定无法提供可信的奖励卡身份
+		push_error("尚未绑定奖励卡牌定义，无法报告奖励卡选择");#报告组件未完成setup
+		return;#不能发出携带空CardDefinition的选择信号
+	if disabled:#外层奖励页面当前没有开放这张卡的选择权限
+		return;#禁用状态下忽略输入，不报告玩家选择
+	if _selection_reported:#页面切换完成前可能出现快速连续输入
+		return;#同一次setup周期最多报告一次选择
+
+	_selection_reported = true;#先提交本地防重复状态，阻止当前调用链再次选择
+	set_interactable(false);#通过统一入口立即禁用按钮，并同步刷新整张卡牌的灰暗外观
+	reward_card_selected.emit(card_definition);#只报告静态定义，由流程层决定是否加入RunState

@@ -1,0 +1,22 @@
+[gd_scene format=3 uid="uid://da3ig4v3lvky8"]
+
+[ext_resource type="Script" uid="uid://dwygree6knwv8" path="res://run/map/map_node_view.gd" id="1_fo3iw"]
+
+[node name="map_node_view" type="Control" unique_id=59141312]
+custom_minimum_size = Vector2(170, 90)
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("1_fo3iw")
+
+[node name="node_button" type="Button" parent="." unique_id=538298960]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_default_cursor_shape = 2
+theme_override_font_sizes/font_size = 20
+disabled = true
+text = "地图节点"
+autowrap_mode = 3

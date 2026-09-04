@@ -1,380 +1,308 @@
-# Godot 卡牌战斗原型
+# Godot 卡牌冒险原型
 
-这是一个使用 Godot 4.6 开发的单场卡牌战斗原型。项目第一阶段的目标是：用最小规则验证一个可以反复开始的“玩家出牌 → 敌人行动 → 新回合 → 胜负结算”完整闭环，同时保持数据、规则、流程和显示之间的职责边界。
+这是一个使用 Godot 4.6 开发的单敌人卡牌战斗项目。项目目前已完成第三阶段：在数据驱动的单场战斗系统之上，建立了由主菜单、地图、战斗、卡牌奖励、休整、Boss 战和结算组成的最小完整冒险流程。
 
-> 当前状态：**第一阶段 v0.1 已完成，并已通过人工验收**。
+> 当前状态：**第三阶段 v0.3 已完成，并已完成一次完整人工试玩验证。**
 
-原始阶段规划参见 [第一阶段开发计划.html](./第一阶段开发计划.html)。
+阶段文档：
 
-## 一、当前可玩内容
+- [第一阶段开发计划](./第一阶段开发计划.html)：建立可以反复开始的基础战斗闭环。
+- [第二阶段开发计划](./第二阶段开发计划.html)：建立资源驱动的单敌人战斗系统。
+- [第三阶段开发计划](./第三阶段开发计划.html)：建立最小但完整的整局冒险流程，并记录最终实现。
 
-当前战斗包含：
-
-- 1 名玩家对战 1 名固定敌人。
-- 5 张“打击”与 5 张“防御”组成的测试牌组。
-- 抽牌堆、手牌和弃牌堆。
-- 玩家生命、敌人生命、格挡和能量。
-- 玩家回合、敌人回合与自动进入下一回合。
-- 胜利、失败、操作锁定与重新开始。
-
-当前固定数值：
-
-| 项目 | 数值 |
-| --- | ---: |
-| 玩家最大生命 | 50 |
-| 敌人最大生命 | 30 |
-| 敌人每回合攻击 | 6 |
-| 玩家每回合能量 | 3 |
-| 每回合抽牌数 | 5 |
-| 最大手牌数 | 10 |
-| 打击 | 1 费，造成 6 点伤害 |
-| 防御 | 1 费，获得 5 点格挡 |
-
-## 二、运行环境
-
-- 引擎：Godot 4.6。
-- 渲染模式：Forward Plus。
-- 主场景：`res://main.tscn`。
-- 战斗场景：`res://battle/battle.tscn`。
-
-打开项目：
-
-1. 使用 Godot 导入项目根目录中的 `project.godot`。
-2. 等待素材完成导入。
-3. 运行项目。Godot 会先进入 `main.tscn`，再显示其实例化的 `battle.tscn`。
-
-## 三、核心架构
-
-项目按“数据定义、运行时状态、规则执行、流程控制、界面显示”分层。
+## 一、当前游戏流程
 
 ```text
-卡牌资源 CardDefinition
-          ↓ 创建
-运行时数据 CardInstance / CombatantState / BattleState
-          ↑                     ↓
-          │              BattleController
-          │                     ↓
-          └── ActionQueue 执行伤害、格挡、抽牌
-                                ↓
-                   CardView / CombatantView 刷新显示
+主菜单
+  ↓ 开始游戏，创建新的 RunState
+三节点地图
+  ↓
+哥布林营地：普通战斗
+  ↓ 胜利
+连续三轮卡牌奖励：每轮随机展示三张不同卡牌，选择一张
+  ↓ 共获得三张卡牌
+篝火休整：恢复 15 点生命
+  ↓
+遗迹守卫：Boss 战
+  ↓
+胜利或失败结算
+  ↓ 再次启程
+返回主菜单
 ```
 
-### 1. 数据定义层
+普通战斗失败会立即进入失败结算，不会发放奖励，也不会完成失败的地图节点。Boss 胜利会完成 Boss 节点、把整局标记为胜利，然后进入胜利结算。
 
-`CardDefinition` 是一种卡牌的静态设计数据，继承自 `Resource`。
+结算页中的“再次启程”只负责返回主菜单并清理上一局状态。玩家再次点击主菜单中的“开始游戏”时，才会创建一份全新的 `RunState`。
 
-它保存：
+## 二、当前可玩内容
 
-- 卡牌 ID。
-- 名称和描述。
-- 卡牌类型和目标类型。
-- 基础能量费用。
-- 基础伤害和基础格挡。
-- 卡牌原画。
+### 整局冒险
 
-具体卡牌使用 `.tres` 资源配置。当前包含：
+- 一张由三个线性节点组成的静态地图。
+- 当前生命、实际牌组和地图进度可以跨战斗保存。
+- 初始牌组为 5 张打击和 5 张防御。
+- 普通战斗胜利后连续进行 3 轮奖励，每轮从 4 张奖励卡中随机展示 3 张不同卡牌。
+- 每轮必须选择 1 张卡加入本局牌组，因此一次普通战斗共获得 3 张卡。
+- 同一轮不会出现重复选项；不同轮次可以再次出现同一种卡牌。
+- 休整节点恢复 15 点生命，但不会超过玩家的 50 点最大生命。
+- 胜利、失败、返回主菜单和重新开始已经组成完整闭环。
 
-- `cards/data/strike.tres`
-- `cards/data/defend.tres`
+### 卡牌
 
-多张同名卡牌可以共享同一份 `CardDefinition`，战斗中不修改这些静态资源。
+| 资源 | 显示名称 | 费用 | 效果 |
+| --- | --- | ---: | --- |
+| `strike.tres` | 打击 | 1 | 对敌人造成 6 点伤害 |
+| `defend.tres` | 防御 | 1 | 玩家获得 5 点格挡 |
+| `double_strike.tres` | 双重打击 | 1 | 对敌人造成 3 点伤害，共 2 次 |
+| `attack_and_block.tres` | 防守反击 | 1 | 玩家获得 3 点格挡，然后对敌人造成 4 点伤害 |
+| `tactical_defense.tres` | 战术防御 | 1 | 玩家获得 3 点格挡，然后抽 1 张牌 |
+| `heavy_strike.tres` | 重击 | 2 | 对敌人造成 12 点伤害 |
 
-### 2. 运行时数据层
+### 敌人与遭遇
 
-#### `CardInstance`
+| 遭遇资源 | 敌人显示名称 | 最大生命 | 固定行动循环 |
+| --- | --- | ---: | --- |
+| `cave_crawler_encounter.tres` | 哥布林战士 | 30 | 攻击 6 → 格挡 5 → 攻击 9 |
+| `ruin_guard_encounter.tres` | 遗迹守卫 | 40 | 格挡 8 → 攻击 3 × 2 → 攻击 12 |
 
-代表战斗中真实存在的一张卡牌。每个实例引用一份 `CardDefinition`，并独立保存当前能量费用。
+两份遭遇当前都使用 `EncounterDefinition` 的默认规则：每回合 3 点能量、抽 5 张牌、手牌上限 10 张。
 
-同一种卡牌必须创建多个不同的 `CardInstance`，不能把同一个实例重复放入牌组。
+### 默认地图
 
-#### `CombatantState`
+| 节点 ID | 显示名称 | 类型 | 内容 | 后继节点 |
+| --- | --- | --- | --- | --- |
+| `goblin_battle` | 哥布林营地 | 普通战斗 | `cave_crawler_encounter.tres` | `rest_site` |
+| `rest_site` | 篝火休整 | 休整 | 恢复 15 点生命 | `ruin_guard_boss` |
+| `ruin_guard_boss` | 遗迹守卫 | Boss 战 | `ruin_guard_encounter.tres` | 无 |
 
-代表一名玩家或敌人的运行时状态，保存：
+## 三、运行项目
 
-- 角色名称。
-- 最大生命和当前生命。
-- 当前格挡。
+1. 使用 Godot 4.6 打开项目目录。
+2. 运行项目主场景 `main.tscn`。
+3. 在主菜单点击“开始游戏”。
+4. 按照地图解锁顺序完成普通战斗、三轮奖励、休整和 Boss 战。
 
-`take_damage()` 负责格挡吸收、穿透伤害和生命下限计算。`CombatantView` 不参与伤害计算。
+`main.tscn` 不再直接放置一场固定战斗。它只保留持久存在的 `GameFlowController` 和 `page_container`，由流程控制器实例化当前需要显示的页面。
 
-#### `BattleState`
+## 四、核心架构
 
-是整场战斗的唯一可信数据源，保存：
+项目把稳定配置、整局状态、单场战斗状态、流程编排和界面输入分开管理。
 
-- 玩家和敌人的 `CombatantState`。
-- 每回合基础能量和当前可用能量。
-- 抽牌堆、手牌和弃牌堆。
-- 当前回合编号。
-- `SETUP`、`PLAYER_TURN`、`ENEMY_TURN` 和 `FINISHED` 四种战斗阶段。
+### 1. 静态定义层：描述“这局游戏是什么”
 
-`BattleState` 负责牌堆移动、抽牌堆重洗、能量消耗以及胜负状态查询，但不负责操作 UI。
+这一层主要由 `.tres` 资源组成，运行时必须视为只读。
 
-### 3. 规则执行层
+- `RunDefinition`
+  - 保存玩家定义、初始牌组条目、地图、奖励池、每轮奖励选项数和连续选择次数。
+  - `default_run.tres` 是当前游戏使用的默认整局配置。
+- `MapDefinition`
+  - 保存地图 ID、全部节点和初始可进入节点。
+  - 负责验证重复节点、无效连接、自连接、Boss 缺失和不可达节点。
+- `MapNodeDefinition`
+  - 保存节点 ID、显示名称、节点类型、地图坐标、后继节点、遭遇或治疗量。
+- `EncounterDefinition`
+  - 只保存敌人和单场战斗规则。
+  - 不再保存玩家定义或初始牌组；这些数据属于 `RunDefinition`。
+- `CardDefinition`、`CombatEffectDefinition`
+  - 分别描述卡牌和按顺序执行的战斗效果。
+- `CombatantDefinition`、`EnemyDefinition`、`EnemyActionDefinition`
+  - 描述玩家、敌人及敌人的固定行动循环。
 
-`ActionQueue` 继承自 `RefCounted`，不进入场景树。
+关键原则：静态资源回答“默认配置是什么”，不能保存“这一局已经发生了什么”。
 
-当前使用同步先进先出队列：
+### 2. 局内运行时层：`RunState`
 
-1. 控制器将伤害、格挡或抽牌方法及其参数绑定为 `Callable`。
-2. 行为按加入顺序保存。
-3. `resolve_all()` 依次调用所有行为。
+`RunState` 是一局冒险在战斗之外的唯一状态来源，保存：
 
-它只负责执行顺序，不判断当前回合、卡牌是否在手牌中、能量是否足够或战斗是否结束。
+- 玩家当前生命。
+- 本局实际拥有的 `CardDefinition` 引用列表。
+- 当前正在处理的节点 ID。
+- 可进入节点 ID 列表。
+- 已完成节点 ID 列表。
+- 整局状态：`SETUP`、`IN_PROGRESS`、`VICTORY` 或 `DEFEAT`。
 
-### 4. 流程控制层
+`RunState.owned_cards` 中的每个数组元素代表玩家实际拥有的一张卡。因此，同一份 `CardDefinition` 可以出现多次，但运行时不会修改卡牌资源本身。
 
-`BattleController` 挂载在 `battle.tscn` 的 `battle_controller` 节点上，是唯一的战斗流程入口。
+### 3. 流程编排层：`GameFlowController`
 
-它负责：
+`GameFlowController` 在整局期间持续存在，负责：
 
-- 创建玩家、敌人、初始牌组和 `BattleState`。
-- 连接卡牌点击、结束回合和重新开始信号。
-- 验证战斗阶段、手牌归属和能量。
-- 安排卡牌效果，消耗能量，并将打出的卡牌移入弃牌堆。
-- 执行敌人固定意图。
-- 开始新玩家回合。
-- 检查胜负、锁定操作、显示结果并重开战斗。
-- 根据最新 `BattleState` 刷新所有战斗 UI。
+- 显示主菜单并创建新局。
+- 在 `page_container` 中替换地图、战斗、奖励和结算页面。
+- 接收地图节点选择并调用 `RunState` 推进节点。
+- 把当前生命和牌组注入新战斗。
+- 把战斗剩余生命回写到 `RunState`。
+- 普通战斗胜利后组织连续三轮奖励。
+- 处理休整、Boss 胜利、战斗失败和返回主菜单。
 
-### 5. 显示与输入层
+它不执行具体卡牌效果，也不把地图或奖励规则塞进战斗控制器。
 
-#### `CardView`
+### 4. 单场战斗层：`BattleController` 与 `BattleState`
 
-- 绑定一张 `CardInstance`。
-- 显示当前费用、名称、原画和描述。
-- 使用 `_gui_input()` 接收鼠标左键按下。
-- 发出 `card_selected` 信号，但不判断卡牌能否打出，也不执行卡牌效果。
+`BattleState` 仍然只管理一场战斗中的玩家、敌人、能量、回合阶段、抽牌堆、手牌和弃牌堆。
 
-#### `CombatantView`
+`BattleController` 通过公共方法接收外部流程提供的数据：
 
-- 绑定一份 `CombatantState`。
-- 显示角色名称、生命、格挡和敌人意图。
-- 允许显示生命为 0 的角色。
-- 不修改生命、格挡或回合状态。
+```gdscript
+func start_battle(
+    encounter:EncounterDefinition,
+    player_definition:CombatantDefinition,
+    deck_definitions:Array[CardDefinition],
+    starting_player_health:int
+) -> bool
+```
 
-## 四、项目目录
+每次启动战斗时，控制器都会创建新的 `BattleState`、角色状态和 `CardInstance`。战斗结束后只发送：
+
+```gdscript
+signal battle_finished(victory:bool, remaining_player_health:int)
+```
+
+因此，`BattleController` 不需要知道当前地图节点、奖励次数或整局胜负规则。
+
+### 5. 行为执行层
+
+- `CombatEffectDefinition` 描述伤害、格挡、抽牌、目标、数值和重复次数。
+- `ActionQueue` 按顺序执行已经排入队列的效果。
+- 卡牌和敌人的复合效果、多段效果共用同一条执行路径。
+
+### 6. 视图与输入层
+
+- `MainMenu` 发送 `start_requested`。
+- `MapView` 和 `MapNodeView` 显示地图状态并发送节点选择。
+- `RewardCardView` 是以 `Button` 为根节点的独立奖励卡组件，直接展示 `CardDefinition`。
+- `RewardView` 根据流程层传入的候选数据创建奖励卡视图、锁定首次选择并发送 `reward_selected`。
+- `RunResult` 显示胜负文字并发送 `restart_requested`。
+- 战斗中的 `CardView` 与 `CombatantView` 继续负责战斗画面和输入。
+
+奖励卡视图没有继承战斗卡牌脚本。两者虽然可以共享视觉思路，但依赖的数据和交互语义不同：奖励卡读取静态 `CardDefinition`，战斗卡读取单场 `CardInstance`。
+
+## 五、关键状态流转
+
+### 开始新局
+
+1. `GameFlowController` 创建新的 `RunState`。
+2. `RunState` 从 `RunDefinition` 复制玩家满生命和地图起点。
+3. 初始牌组条目的数量被展开为 10 个 `CardDefinition` 引用。
+4. 流程进入地图页面。
+
+### 进入战斗
+
+1. 地图视图只发送玩家选择的节点 ID。
+2. `RunState.enter_node()` 验证并提交“正在处理的节点”。
+3. `GameFlowController` 读取该节点的遭遇定义。
+4. `BattleController.start_battle()` 用局内生命和牌组创建全新的单场战斗状态。
+
+### 普通战斗胜利
+
+1. 战斗控制器发送胜利状态和剩余生命。
+2. 流程控制器把生命回写到 `RunState`。
+3. 流程控制器从 4 张奖励卡中打乱并截取 3 张，显示本轮奖励页面。
+4. 玩家选择后，`RunState.add_card()` 追加一份卡牌定义引用。
+5. 重复步骤 3～4，直到完成 3 次选择。
+6. 完成普通战斗节点并解锁休整节点。
+
+每一轮抽取都只打乱局部数组，不会改变 `RunDefinition.reward_pool` 的顺序或内容。
+
+### 休整
+
+1. `RunState.enter_node()` 提交休整节点。
+2. `RunState.heal(15)` 根据最大生命计算实际恢复量。
+3. 完成休整节点并解锁 Boss 节点。
+4. 返回地图页面。
+
+### Boss 胜利或战斗失败
+
+- Boss 胜利：回写生命 → 完成 Boss 节点 → `mark_victory()` → 胜利结算。
+- 任意战斗失败：回写生命 → `mark_defeat()` → 失败结算。
+- 结算页点击“再次启程”：清空当前 `RunState` 和奖励计数 → 返回主菜单。
+
+## 六、调整游戏内容
+
+### 调整初始牌组与奖励
+
+编辑 `run/data/default_run.tres`：
+
+- `starting_deck_entries` 决定初始牌组的卡牌及数量。
+- `reward_pool` 决定普通战斗可以出现哪些奖励卡。
+- `reward_option_count` 决定每轮展示几张不同卡牌，不能超过奖励池大小。
+- `reward_selection_count` 决定普通战斗胜利后连续选择几次。
+
+后两个字段当前使用脚本中的默认值 `3`，因此 `.tres` 没有显式覆盖它们。
+
+### 调整地图
+
+编辑 `run/map/data/first_map.tres`：
+
+- `nodes` 保存全部节点定义。
+- `starting_node_ids` 决定新局最先解锁的节点。
+- `map_position` 决定节点在地图页面中的显示坐标。
+- `next_node_ids` 决定完成节点后解锁哪些后继节点。
+- 战斗节点通过 `encounter_definition` 选择遭遇。
+- 休整节点通过 `heal_amount` 决定恢复量。
+
+### 调整单场规则
+
+编辑 `battle/data/encounters/` 中的遭遇资源：
+
+- `enemy_definition` 选择敌人。
+- `energy_per_turn`、`cards_per_turn`、`max_hand_size` 调整单场规则。
+- 未在 `.tres` 中显式写出的字段使用 `EncounterDefinition` 脚本默认值。
+
+## 七、目录结构
 
 ```text
-res://
-├── project.godot                         # Godot 项目配置，主场景为 main.tscn
-├── main.tscn                            # 项目入口，实例化 battle.tscn
-├── 第一阶段开发计划.html               # 第一阶段范围、架构和验收标准
-├── artworks/
-│   └── background.png                  # 战斗背景
-├── assets/images/
-│   ├── strike.png                      # 打击卡原画
-│   └── defend.png                      # 防御卡原画
+游戏开发/
+├── main.tscn                         # 应用入口与持久流程控制器
+├── run/
+│   ├── game_flow_controller.gd       # 整局页面与流程编排
+│   ├── data/                         # RunDefinition 与默认整局资源
+│   ├── model/                        # RunState
+│   ├── map/                          # 地图定义、资源、视图和节点组件
+│   ├── reward/                       # 奖励页面与奖励卡组件
+│   └── screens/                      # 主菜单与整局结算页面
 ├── battle/
-│   ├── battle.tscn                     # 单场战斗界面与节点组装
-│   ├── battle_controller.gd            # 战斗流程控制器
-│   ├── actions/
-│   │   └── action_queue.gd            # 同步战斗行为队列
-│   └── model/
-│       ├── battle_state.gd            # 整场战斗的运行时状态
-│       ├── card_instance.gd           # 某一张卡的运行时实例
-│       └── combatant_state.gd         # 某一名战斗角色的状态
-├── cards/
-│   ├── card_definition.gd             # 卡牌静态定义类
-│   ├── card_view.tscn                 # 卡牌显示场景
-│   ├── card_view.gd                   # 卡牌数据绑定与点击信号
-│   └── data/
-│       ├── strike.tres                # 打击卡配置
-│       └── defend.tres                # 防御卡配置
-└── combatants/
-    ├── combatant_view.tscn            # 玩家与敌人共用的显示场景
-    └── combatant_view.gd              # 角色状态绑定与显示刷新
+│   ├── battle_controller.gd          # 单场战斗编排和外部接口
+│   ├── battle.tscn                   # 可复用战斗页面
+│   ├── actions/                      # 效果定义与行动队列
+│   ├── data/                         # 遭遇与初始牌组条目定义
+│   └── model/                        # 单场战斗运行时状态
+├── cards/                            # 卡牌定义、数据与战斗卡牌视图
+├── combatants/                       # 玩家、敌人、行动定义与角色视图
+├── artworks/                         # 玩家、敌人和页面背景原画
+└── assets/images/                    # 卡牌插画
 ```
 
-Godot 生成的 `.uid`、`.import` 和 `.godot/` 为引擎识别与导入数据，不承载战斗规则。
+Godot 生成的 `.uid` 和 `.import` 文件需要与对应脚本、图片一起保留，以维持资源身份和导入设置。
 
-## 五、场景组装
+## 八、第三阶段验收结果
 
-### `main.tscn`
+- [x] 游戏从主菜单开始，而不是直接进入战斗。
+- [x] 三节点地图会显示锁定、可进入和已完成状态。
+- [x] 普通战斗与 Boss 节点可以启动不同遭遇。
+- [x] 战斗后的剩余生命可以跨战斗保存。
+- [x] 普通战斗胜利后连续进行三轮三选一奖励。
+- [x] 三张奖励卡会加入本局牌组，并可能在 Boss 战中抽到。
+- [x] 休整恢复 15 点生命且不超过最大生命。
+- [x] Boss 胜利与任意战斗失败均会进入对应结算。
+- [x] “再次启程”返回主菜单；再次开始会创建干净的新局。
+- [x] `RunState`、`BattleState` 和静态资源的职责边界保持清晰。
+- [x] 已由玩家完成一次从开始到结算的完整人工试玩验证。
 
-```text
-Main
-└── battle（battle.tscn 场景实例）
-```
+本次收尾只进行文档与代码静态一致性检查，没有运行额外的 Godot 命令或自动化测试。
 
-`main.tscn` 是项目的稳定入口。以后加入主菜单、地图、奖励或其他页面时，可以在这一层替换当前页面，而不需要把 `battle.tscn` 永久作为项目根场景。
+## 九、当前开发约定
 
-### `battle.tscn`
+- 静态 `.tres` 资源在运行时只读。
+- 跨战斗数据写入 `RunState`，单场数据写入 `BattleState`。
+- `RunState` 保存 `CardDefinition`，每场战斗重新创建 `CardInstance`。
+- 页面和组件通过信号报告玩家意图，不直接决定流程去向。
+- 页面切换、奖励次数、胜负去向由 `GameFlowController` 统一编排。
+- 新增脚本继续补充文档注释，并在关键状态变更处说明原因。
+- 调整场景节点名称或层级时，同步检查脚本中的节点路径。
 
-```text
-battle
-├── background
-├── main_layout
-│   ├── enemy_area
-│   │   └── enemy_view（combatant_view.tscn 实例）
-│   ├── player_area
-│   │   └── player_view（combatant_view.tscn 实例）
-│   ├── battle_info_area
-│   │   ├── energy_label
-│   │   ├── draw_pile_label
-│   │   └── discard_pile_label
-│   ├── hand_area
-│   └── end_turn_button
-├── result_overlay
-│   └── result_layout
-│       ├── result_label
-│       └── restart_button
-└── battle_controller
-```
+## 十、当前范围与后续方向
 
-当前界面使用第一阶段的简化布局：
+当前版本仍是学习架构用的原型，暂未包含随机地图、分支路线、商店、事件、遗物、药水、货币、存档、局外成长、多敌人、状态效果体系、正式异步演出、完整音效和最终 UI 美术。
 
-- 玩家显示位于左侧，敌人显示位于右侧。
-- 手牌放在屏幕底部，并刻意从左向右排列。
-- 抽牌堆、弃牌堆和能量信息位于左下角。
-- 结束回合按钮位于右下角。
-- 背景使用图片并覆盖完整战斗区域。
-- 部分 UI 使用固定坐标；这是第一阶段接受的刻意取舍。
-
-## 六、战斗流程
-
-### 1. 初始化战斗
-
-```text
-main.tscn 实例化 battle.tscn
-        ↓
-BattleController 连接按钮信号
-        ↓
-创建玩家、敌人和 10 个独立 CardInstance
-        ↓
-创建 BattleState，将全部卡牌放入抽牌堆并洗牌
-        ↓
-绑定玩家与敌人的 CombatantView
-        ↓
-恢复 3 点能量，进入第 1 回合，抽取 5 张手牌
-```
-
-### 2. 打出卡牌
-
-```text
-玩家点击 CardView
-        ↓
-CardView 发出 card_selected(CardInstance)
-        ↓
-BattleController 检查回合、实例有效性、手牌归属和能量
-        ↓
-根据目标类型将伤害或格挡加入 ActionQueue
-        ↓
-消耗能量，将卡牌从手牌移入弃牌堆
-        ↓
-ActionQueue 执行效果
-        ↓
-检查胜负并刷新界面
-```
-
-能量不足时，操作会被拒绝，卡牌、能量和目标状态保持不变。
-
-### 3. 结束回合
-
-```text
-玩家请求结束回合
-        ↓
-阶段切换为 ENEMY_TURN，剩余手牌全部进入弃牌堆
-        ↓
-敌人清除自己的旧格挡，执行固定 6 点攻击
-        ↓
-玩家格挡优先吸收伤害
-        ↓
-玩家存活：清除剩余格挡，恢复能量，进入新回合并抽牌
-玩家死亡：进入 FINISHED 并显示失败
-```
-
-抽牌堆为空而弃牌堆不为空时，`BattleState` 会自动将弃牌堆洗回抽牌堆。
-
-### 4. 胜负与重开
-
-- 敌人生命归零：显示“胜利”。
-- 玩家生命归零：显示“失败”。
-- 战斗结束后，阶段设为 `FINISHED`，清空未执行行为，禁用结束回合按钮，结果遮罩阻止继续操作底层 UI。
-- 重新开始会创建新的玩家、敌人、`CardInstance` 和 `BattleState`，不沿用上一场战斗的生命、格挡、能量或牌堆。
-
-## 七、手牌界面的重建策略
-
-`BattleState.hand` 是真实手牌，`hand_area` 中的 `CardView` 只是它的屏幕表现。
-
-当前每次手牌改变后，`BattleController` 会：
-
-1. 从 `hand_area` 移除并安全释放所有旧 `CardView`。
-2. 遍历 `BattleState.hand`。
-3. 为每个 `CardInstance` 实例化一个新 `CardView`。
-4. 先将 `CardView` 加入场景树，再绑定 `CardInstance`，确保 `@onready` 引用已经准备完成。
-5. 连接新 `CardView` 的 `card_selected` 信号。
-
-这种方式优先保证第一阶段的简单性和数据一致性。它会丢失旧节点上的悬停或动画状态，因此在开发卡牌动画时，可以改为根据 `CardInstance` 单独新增、移除和移动对应 `CardView`。
-
-## 八、已完成的第一阶段功能
-
-- [x] `main.tscn` 作为项目入口并实例化战斗场景。
-- [x] 战斗开始时创建玩家、敌人和初始牌组。
-- [x] 玩家回合开始时恢复能量并抽取手牌。
-- [x] 手牌中的每个 `CardInstance` 都拥有一个 `CardView`。
-- [x] 抽牌堆和弃牌堆中的卡牌没有常驻显示节点。
-- [x] 能量不足时拒绝出牌。
-- [x] 打击造成伤害，防御获得格挡。
-- [x] 格挡优先抵消敌人攻击伤害。
-- [x] 结束回合后敌人执行固定意图。
-- [x] 角色生命和格挡始终从 `CombatantState` 刷新。
-- [x] 任意一方死亡后停止普通战斗操作。
-- [x] 显示胜利或失败结果。
-- [x] 重新开始创建一份干净的新战斗状态。
-- [x] `CardView` 和 `CombatantView` 不直接修改战斗状态。
-- [x] 新增一张基础伤害或格挡卡时，不需要创建新场景。
-
-## 九、当前范围与刻意取舍
-
-第一阶段刻意不包含：
-
-- 状态效果、遗物、药水和角色成长。
-- 地图、奖励、商店、事件与存档。
-- 多敌人、多目标选择和复杂意图。
-- 拖拽出牌、曲线手牌和正式战斗动画。
-- 声音、特效与完整美术表现。
-- 自动化测试和调试界面。
-- 全局事件总线或其他为未来提前搭建的大型框架。
-
-当前还有以下已知限制：
-
-- 参战角色、牌组数量、每回合能量和敌人攻击值仍固定在 `BattleController` 常量中。
-- `CombatantState` 尚未包含或引用角色静态定义，因此玩家和敌人原画未实现数据驱动。
-- 敌人意图文字和行动均由 `BattleController` 使用固定值提供。
-- `CardDefinition` 只能直接表达基础伤害与格挡，尚不能组合抽牌、多段攻击、状态等复杂效果。
-- `ActionQueue` 当前立即同步结算，没有等待动画或玩家选择的机制。
-- 手牌每次更新时整体重建 `CardView`，尚未保留节点级动画状态。
-
-## 十、开发约定
-
-继续开发时应保持以下规则：
-
-1. **数据是真实状态。** 不能从 `Label`、`ProgressBar` 或 `CardView` 反向读取战斗数据。
-2. **View 只显示和报告输入。** `CardView` 不扣能量，`CombatantView` 不扣生命。
-3. **Controller 组织流程。** 回合、目标、费用、牌堆移动和胜负由 `BattleController` 统一协调。
-4. **Model 保存数据与基础规则。** 生命、格挡、能量和牌堆不依赖场景树。
-5. **静态定义与运行时实例分离。** `.tres` 保存设计数据，`CardInstance` 保存单场战斗中的临时状态。
-6. **先入树，后绑定。** 运行时创建 `CardView` 时，先调用 `add_child()`，再调用 `bind_card_instance()`，以保证 `@onready` 引用可用。
-7. **新功能先定义阶段边界。** 不要为未确定的远期功能提前引入大型框架。
-8. **命名保持 `snake_case`。** Godot 内置类型名保留引擎原名。
-
-## 十一、第二阶段开工前的建议
-
-进入第二阶段前，先明确该阶段的唯一主目标。不建议同时开发多敌人、状态、动画、地图和存档。
-
-推荐的演进顺序：
-
-1. **数据驱动角色与遭遇。** 为玩家和敌人建立静态定义资源，将姓名、最大生命、原画和敌人意图从 `BattleController` 常量中移出。
-2. **抽离敌人意图和行动选择。** 让敌人运行时状态保存已决定的下一步行动，View 只显示其结果。
-3. **扩展卡牌效果表达。** 在伤害和格挡之外，再根据确定需求加入抽牌、多段攻击或状态。
-4. **扩展目标系统。** 只有在确定需要多敌人时，再将单个 `enemy_state` 演进为敌人数组并引入目标选择。
-5. **改造显示更新。** 需要抽牌、出牌和弃牌动画时，再将整手重建改为按实例增量更新。
-6. **最后扩展局外页面。** 利用 `main.tscn` 作为页面入口，再加入地图、奖励或主菜单。
-
-在确定第二阶段主目标后，建议新建一份独立阶段计划，列出“要做、不做、数据边界、开发顺序和验收标准”，再开始修改第一阶段稳定代码。
-
-## 十二、阶段交接摘要
-
-第一阶段已经建立了可复用的战斗骨架：静态卡牌资源生成运行时卡牌，`BattleState` 保存唯一真实状态，`BattleController` 组织回合与胜负，`ActionQueue` 结算行为，View 只负责显示和输入。
-
-下一阶段应将这套边界作为已稳定基线。新功能应优先通过扩展数据定义、运行时状态和控制器流程接入，而不是让 View 开始保存规则或把 UI 数值当作真实数据。
+第三阶段完成后，项目已经拥有可以持续扩展的游戏骨架。后续阶段可以围绕内容扩充、战斗体验、地图选择、成长系统和表现层逐项演进，而不需要再次把整套入口流程推倒重写。

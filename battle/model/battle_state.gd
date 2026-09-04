@@ -24,8 +24,9 @@ enum BattlePhase{
 ## 当前战斗中的玩家状态实例，用于读取和修改玩家的生命与格挡等真实数据。
 var player_state:CombatantState;
 
-## 当前战斗中的敌人状态实例，用于读取和修改敌人的生命与格挡等真实数据。
-var enemy_state:CombatantState;
+## 当前战斗中的敌人状态实例。
+## 除生命与格挡外，还保存敌人定义、当前行动下标和已经准备好的当前行动。
+var enemy_state:EnemyState;
 
 ## 玩家每个回合开始时应当恢复到的基础能量，不能小于0。
 var energy_per_turn:int;#每回合开始恢复的能量
@@ -48,19 +49,37 @@ var current_phase:BattlePhase;
 ## 当前回合编号；初始化时为0，正式开始新的玩家回合时再由控制器递增。
 var current_turn_number:int=0;#当前回合编号
 
-## 玩家能够持有的最大手牌数量；达到或超过该数值时不能继续抽牌。
-var max_hand_size:int=10;
-
-## 使用参战角色、初始牌组和每回合能量初始化一场新战斗。
+## 玩家每个回合开始时应当尝试抽取的卡牌数量，必须大于0。
 ##
-## player或enemy为null、任意一方未存活、energy_start小于0，或者start_pile为空时，
+## 该数值来自遭遇配置，由控制器在开始玩家回合时读取；BattleState只保存规则，
+## 不会因为该变量变化而自动触发抽牌。
+var cards_per_turn:int;
+
+## 玩家能够持有的最大手牌数量；达到或超过该数值时不能继续抽牌。
+##
+## 该数值来自遭遇配置，必须大于0，并且不能小于cards_per_turn。
+var max_hand_size:int;
+
+## 使用参战角色、初始牌组和遭遇规则参数初始化一场新战斗。
+##
+## player或enemy为null、任意一方未存活、敌人定义或当前行动非法、
+## energy_start小于0、cards_each_turn或hand_size_limit不合法，或者start_pile为空时，
 ## 推送对应错误、保持当前BattleState原有数据不变，并返回false。
+## cards_each_turn必须大于0且不能超过hand_size_limit；hand_size_limit必须大于0。
 ## start_pile中存在null、非法CardInstance，或者重复放入同一个CardInstance时，
 ## 推送对应错误、保持当前BattleState原有数据不变，并返回false。
 ## 所有参数合法时保存角色引用，将start_pile中的卡牌实例放入draw_pile，清空hand和
-## discard_pile，把能量、回合编号和阶段恢复为战斗初始状态，然后返回true。
+## discard_pile，保存全部遭遇规则，把能量、回合编号和阶段恢复为战斗初始状态，
+## 然后返回true。
 ## 该方法会复制start_pile数组本身，但不会复制数组中的CardInstance。
-func battle_state_init(player:CombatantState,enemy:CombatantState,start_pile:Array[CardInstance],energy_start:int)->bool:
+func battle_state_init(
+	player:CombatantState,
+	enemy:EnemyState,
+	start_pile:Array[CardInstance],
+	energy_start:int,
+	cards_each_turn:int,
+	hand_size_limit:int
+)->bool:
 	if player == null:
 		push_error("非法玩家对象，战斗初始化失败")
 		return false;
@@ -73,9 +92,36 @@ func battle_state_init(player:CombatantState,enemy:CombatantState,start_pile:Arr
 	if not enemy.is_alive():
 		push_error("敌人未存活，战斗初始化失败")
 		return false;
+	if enemy.enemy_definition == null:#敌人运行时状态必须保留具体的静态定义
+		push_error("敌人定义为空，战斗初始化失败")
+		return false;
+	if enemy.enemy_definition.is_invalid():#非法定义无法提供可靠的行动模式
+		push_error("敌人定义无效，战斗初始化失败")
+		return false;
+	if enemy.current_action_index < 0 or enemy.current_action_index >= enemy.enemy_definition.action_pattern.size():#下标必须落在行动模式范围内
+		push_error("敌人当前行动下标越界，战斗初始化失败")
+		return false;
+	if enemy.current_action == null:#界面和控制器都需要读取已经准备好的行动
+		push_error("敌人当前行动为空，战斗初始化失败")
+		return false;
+	if enemy.current_action.is_invalid():#拒绝把效果不完整的行动带入战斗
+		push_error("敌人当前行动无效，战斗初始化失败")
+		return false;
+	if enemy.current_action != enemy.enemy_definition.action_pattern[enemy.current_action_index]:#行动引用必须与当前下标一致
+		push_error("敌人当前行动与行动下标不一致，战斗初始化失败")
+		return false;
 	if energy_start<0:
 		push_error("初始能量非法，战斗初始化失败")
 		return false;
+	if cards_each_turn <= 0:#每个玩家回合必须配置正数抽牌数量
+		push_error("每回合抽牌数必须大于0，战斗初始化失败");#报告无法正常开始玩家回合的规则
+		return false;#非法抽牌规则不能写入当前BattleState
+	if hand_size_limit <= 0:#手牌上限必须能够容纳至少一张卡牌
+		push_error("手牌上限必须大于0，战斗初始化失败");#报告无法容纳卡牌的规则
+		return false;#非法上限不能交给抽牌方法使用
+	if cards_each_turn > hand_size_limit:#基础回合抽牌量不能从一开始就超过手牌容量
+		push_error("每回合抽牌数不能超过手牌上限，战斗初始化失败");#报告互相冲突的遭遇规则
+		return false;#参数关系非法时保持当前BattleState原有数据不变
 	if start_pile.is_empty():
 		push_error("初始牌组为空，战斗初始化失败")
 		return false;
@@ -102,14 +148,16 @@ func battle_state_init(player:CombatantState,enemy:CombatantState,start_pile:Arr
 	current_available_energy = 0;
 	current_turn_number = 0;
 	current_phase = BattlePhase.SETUP;
-	energy_per_turn = energy_start;
+	energy_per_turn = energy_start;#保存遭遇指定的每回合基础能量
+	cards_per_turn = cards_each_turn;#保存遭遇指定的每回合抽牌数量
+	max_hand_size = hand_size_limit;#保存遭遇指定的手牌容量规则
 	
 	return true;
 
 ## 检查当前战斗状态是否存在非法数据。
 ##
-## 角色状态为空，能量或回合编号小于0，手牌上限不合法，或者手牌数量超过上限时，
-## 推送对应错误并返回true。
+## 角色状态为空，敌人定义或当前行动非法，能量或回合编号小于0，每回合抽牌数或
+## 手牌上限不合法，或者手牌数量超过上限时，推送对应错误并返回true。
 ## 任意牌堆中存在null、非法CardInstance，或者同一个CardInstance在一个或多个牌堆中
 ## 重复出现时，推送对应错误并返回true。
 ## 上述非法情况均不存在时返回false。
@@ -121,6 +169,24 @@ func is_invalid_battle()->bool:
 	if enemy_state == null:
 		push_error("敌人状态为空，战斗状态非法")
 		return true;
+	if enemy_state.enemy_definition == null:#缺少敌人定义时无法验证行动模式
+		push_error("敌人定义为空，战斗状态非法")
+		return true;
+	if enemy_state.enemy_definition.is_invalid():#运行时敌人不能依赖非法静态数据
+		push_error("敌人定义无效，战斗状态非法")
+		return true;
+	if enemy_state.current_action_index < 0 or enemy_state.current_action_index >= enemy_state.enemy_definition.action_pattern.size():#防止访问越界的行动项
+		push_error("敌人当前行动下标越界，战斗状态非法")
+		return true;
+	if enemy_state.current_action == null:#敌人回合开始前必须已经准备好行动
+		push_error("敌人当前行动为空，战斗状态非法")
+		return true;
+	if enemy_state.current_action.is_invalid():#当前行动中的效果必须完整合法
+		push_error("敌人当前行动无效，战斗状态非法")
+		return true;
+	if enemy_state.current_action != enemy_state.enemy_definition.action_pattern[enemy_state.current_action_index]:#确保显示意图与实际执行来源相同
+		push_error("敌人当前行动与行动下标不一致，战斗状态非法")
+		return true;
 	if energy_per_turn < 0:
 		push_error("每回合能量小于零，战斗状态非法")
 		return true;
@@ -130,9 +196,15 @@ func is_invalid_battle()->bool:
 	if current_turn_number < 0:
 		push_error("当前回合编号小于零，战斗状态非法")
 		return true;
+	if cards_per_turn <= 0:#运行时规则必须保留正数的每回合抽牌量
+		push_error("每回合抽牌数小于或等于零，战斗状态非法");#报告遭遇规则未保存或被错误修改
+		return true;#非法规则不能继续驱动玩家回合
 	if max_hand_size <= 0:
 		push_error("手牌上限小于或等于零，战斗状态非法")
 		return true;
+	if cards_per_turn > max_hand_size:#每回合基础抽牌量必须能够被手牌容量完整容纳
+		push_error("每回合抽牌数超过手牌上限，战斗状态非法");#报告运行时规则之间发生冲突
+		return true;#互相冲突的规则不能继续推进战斗
 	if hand.size() > max_hand_size:
 		push_error("当前手牌数量超过手牌上限，战斗状态非法")
 		return true;

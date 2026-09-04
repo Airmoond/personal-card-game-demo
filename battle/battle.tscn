@@ -121,34 +121,5 @@ grow_horizontal = 0
 grow_vertical = 0
 text = "结束回合"
 
-[node name="result_overlay" type="PanelContainer" parent="." unique_id=1935599148]
-z_index = 10
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-
-[node name="result_layout" type="Control" parent="result_overlay" unique_id=657220708]
-layout_mode = 2
-
-[node name="result_label" type="Label" parent="result_overlay/result_layout" unique_id=1040513333]
-layout_mode = 0
-offset_top = 295.0
-offset_right = 1152.0
-offset_bottom = 318.0
-theme_override_font_sizes/font_size = 34
-text = "战斗结果"
-horizontal_alignment = 1
-
-[node name="restart_button" type="Button" parent="result_overlay/result_layout" unique_id=789922712]
-layout_mode = 0
-offset_left = 516.0
-offset_top = 362.0
-offset_right = 638.0
-offset_bottom = 411.0
-text = "重新开始"
-
 [node name="battle_controller" type="Node" parent="." unique_id=1200486040]
 script = ExtResource("3_qubjc")

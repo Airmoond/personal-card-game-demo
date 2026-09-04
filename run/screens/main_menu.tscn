@@ -1,0 +1,74 @@
+[gd_scene format=3 uid="uid://b3pn6ri4pufim"]
+
+[ext_resource type="Script" uid="uid://ci62y0ix35xdu" path="res://run/screens/main_menu.gd" id="1_mexws"]
+[ext_resource type="Texture2D" uid="uid://dfkyhh4xvl0j2" path="res://artworks/main_background.png" id="2_07u3d"]
+
+[node name="main_menu" type="Control" unique_id=871468367]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_mexws")
+
+[node name="background" type="TextureRect" parent="." unique_id=1257181478]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -1.0
+offset_top = -1.0
+offset_right = 5.0
+offset_bottom = 8.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("2_07u3d")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="background_overlay" type="ColorRect" parent="." unique_id=607506110]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 0.019607844)
+
+[node name="center_container" type="CenterContainer" parent="." unique_id=157060230]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="main_layout" type="VBoxContainer" parent="center_container" unique_id=734887830]
+custom_minimum_size = Vector2(360, 0)
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="title_label" type="Label" parent="center_container/main_layout" unique_id=1452614170]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 48
+text = "秘境卡牌"
+horizontal_alignment = 1
+
+[node name="subtitle_label" type="Label" parent="center_container/main_layout" unique_id=2134927752]
+layout_mode = 2
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 24
+text = "MythCard"
+horizontal_alignment = 1
+
+[node name="start_button" type="Button" parent="center_container/main_layout" unique_id=1027912107]
+custom_minimum_size = Vector2(150, 52)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 20
+text = "开始旅程"

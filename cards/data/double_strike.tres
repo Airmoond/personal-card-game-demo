@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="CardDefinition" format=3 uid="uid://bu8suls0nducp"]
+
+[ext_resource type="Script" uid="uid://c07wl5mo5epjy" path="res://battle/actions/combat_effect_definition.gd" id="1_mdf6x"]
+[ext_resource type="Texture2D" uid="uid://cjnktgfgaba8q" path="res://assets/images/double_strike.png" id="1_ny0v6"]
+[ext_resource type="Script" uid="uid://drcw0copl04t2" path="res://cards/card_definition.gd" id="2_ny0v6"]
+
+[sub_resource type="Resource" id="Resource_mdf6x"]
+script = ExtResource("1_mdf6x")
+target_type = 1
+amount = 3
+repeat_count = 2
+metadata/_custom_type_script = "uid://c07wl5mo5epjy"
+
+[resource]
+script = ExtResource("2_ny0v6")
+card_id = "double_strike"
+card_name = "双重打击"
+description = "造成3点伤害，共2次"
+base_energy_cost = 1
+effects = Array[ExtResource("1_mdf6x")]([SubResource("Resource_mdf6x")])
+artwork = ExtResource("1_ny0v6")
+metadata/_custom_type_script = "uid://drcw0copl04t2"

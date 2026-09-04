@@ -1,8 +1,10 @@
 ## 卡牌的静态定义资源。
 ##
-## 保存一种卡牌的ID、名称、描述、类型、目标类型、原画和基础数值。
+## 保存一种卡牌的ID、名称、描述、类型、基础费用、原画和有序效果列表。
 ## 多个运行时CardInstance可以共同引用同一份CardDefinition资源。
 ## 战斗过程中应当将该资源视为只读数据，临时变化应保存在CardInstance中。
+## 卡牌的目标、伤害、格挡和抽牌等规则由effects中的每个CombatEffectDefinition描述；
+## CardDefinition本身不选择实际目标，也不直接执行任何战斗效果。
 class_name CardDefinition;
 extends Resource;
 
@@ -14,16 +16,6 @@ enum CardType {
 	
 	## 技能牌，主要用于获得格挡或产生其他非攻击效果。
 	SKILL
-}
-
-
-## 卡牌效果的目标类型。
-enum TargetType {
-	## 卡牌效果作用于玩家自己，不需要选择敌人。
-	SELF,
-	
-	## 卡牌效果作用于一个敌人，需要指定或自动选择敌人目标。
-	ENEMY,
 }
 
 
@@ -47,26 +39,17 @@ enum TargetType {
 @export var card_type:CardType;
 
 
-## 卡牌效果的目标类型，例如玩家自己或一个敌人。
-@export var target_type:TargetType;
-
-
 ## 卡牌原本需要消耗的能量。
 ##
 ## 该数值必须大于或等于0，战斗中的临时费用变化不应修改该字段。
 @export var base_energy_cost:int = 0;
 
 
-## 卡牌原本能够造成的伤害。
+## 按照设计顺序保存这张卡牌包含的全部战斗效果。
 ##
-## 没有伤害效果时为0，该数值不能小于0。
-@export var base_damage_amount:int = 0;
-
-
-## 卡牌原本能够提供的格挡。
-##
-## 没有格挡效果时为0，该数值不能小于0。
-@export var base_block_amount:int = 0;
+## 数组顺序就是控制器安排效果的顺序；其中每个元素都必须存在且合法。
+## 该数组是卡牌效果的唯一静态数据来源，因此至少需要包含一项效果。
+@export var effects:Array[CombatEffectDefinition] = [];
 
 
 ## 卡牌使用的原画资源。
@@ -80,8 +63,8 @@ enum TargetType {
 ## card_id为空时推送错误并返回true。
 ## card_name为空时推送错误并返回true。
 ## description为空时推送错误并返回true。
-## 基础费用、基础伤害或基础格挡小于0时推送错误并返回true。
-## 基础伤害和基础格挡同时为0时推送错误并返回true。
+## 基础费用小于0时推送错误并返回true。
+## effects为空，或者其中存在null或非法CombatEffectDefinition时，推送错误并返回true。
 ## 所有字段均满足当前阶段的规则时返回false。
 ## 该方法在发现第一个错误后立即结束，不会继续检查后续字段。
 func is_invalid()->bool:
@@ -97,25 +80,15 @@ func is_invalid()->bool:
 	if base_energy_cost < 0:
 		push_error("Invalid base_energy_cost! 非法的卡牌费用");
 		return true;
-	if base_damage_amount < 0:
-		push_error("Invalid base_damage_amount! 非法的伤害数值");
-		return true;
-	if base_block_amount < 0:
-		push_error("Invalid base_block_amount! 非法的格挡数值");
-		return true;
-	if base_damage_amount == 0 and base_block_amount == 0:
-		push_error("Invalid damage and block amount! 伤害和格挡不可同时为零");
-		return true;
+	if effects.is_empty():#卡牌必须至少配置一项统一战斗效果
+		push_error("Invalid effects! 卡牌效果数组为空");#报告缺少唯一效果来源
+		return true;#没有效果的卡牌定义不能进入战斗
+	for effect_index in range(effects.size()):#按照数组顺序逐一验证所有卡牌效果
+		var effect:CombatEffectDefinition = effects[effect_index];#取得当前位置的效果定义，便于报告准确下标
+		if effect == null:#效果数组中不能出现没有实际资源的空元素
+			push_error("Invalid effect! 卡牌效果[%d]为空" % effect_index);#报告空效果所在的位置
+			return true;#空元素无法被控制器解释，立即判定整张卡牌无效
+		if effect.is_invalid():#复用效果定义自身的类型、目标、数值和重复次数检查
+			push_error("Invalid effect! 卡牌效果[%d]无效" % effect_index);#补充卡牌数组中的上下文位置
+			return true;#任意一项效果非法时，整张卡牌定义都不能使用
 	return false;
-
-
-## 判断这张卡牌是否需要指定一个敌人目标。
-##
-## target_type为TargetType.ENEMY时返回true。
-## target_type为TargetType.SELF时返回false。
-## 该方法只进行判断，不会选择目标，也不会修改卡牌定义。
-func requires_target()->bool:
-	if target_type == TargetType.ENEMY:
-		return true;
-	else:
-		return false;

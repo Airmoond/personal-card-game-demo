@@ -1,7 +1,14 @@
 [gd_resource type="Resource" script_class="CardDefinition" format=3 uid="uid://bvu4nx4814o1r"]
 
-[ext_resource type="Texture2D" uid="uid://vpowl3uhw5oc" path="res://assets/images/defend.png" id="1_6ocg3"]
+[ext_resource type="Texture2D" uid="uid://oreisyrjoel3" path="res://assets/images/new_defend.png" id="1_ai3yl"]
 [ext_resource type="Script" uid="uid://drcw0copl04t2" path="res://cards/card_definition.gd" id="1_wwom3"]
+[ext_resource type="Script" uid="uid://c07wl5mo5epjy" path="res://battle/actions/combat_effect_definition.gd" id="2_ai3yl"]
+
+[sub_resource type="Resource" id="Resource_t76t5"]
+script = ExtResource("2_ai3yl")
+effect_type = 1
+amount = 5
+metadata/_custom_type_script = "uid://c07wl5mo5epjy"
 
 [resource]
 script = ExtResource("1_wwom3")
@@ -10,6 +17,6 @@ card_name = "防御"
 description = "获得5点格挡。"
 card_type = 1
 base_energy_cost = 1
-base_block_amount = 5
-artwork = ExtResource("1_6ocg3")
+effects = Array[ExtResource("2_ai3yl")]([SubResource("Resource_t76t5")])
+artwork = ExtResource("1_ai3yl")
 metadata/_custom_type_script = "uid://drcw0copl04t2"

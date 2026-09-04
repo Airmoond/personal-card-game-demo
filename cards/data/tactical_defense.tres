@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="CardDefinition" format=3 uid="uid://d4dsmwtcj1p3m"]
+
+[ext_resource type="Texture2D" uid="uid://qx5fdb460qei" path="res://assets/images/tactical_defense.png" id="1_eppxx"]
+[ext_resource type="Script" uid="uid://c07wl5mo5epjy" path="res://battle/actions/combat_effect_definition.gd" id="1_o3kt1"]
+[ext_resource type="Script" uid="uid://drcw0copl04t2" path="res://cards/card_definition.gd" id="2_eppxx"]
+
+[sub_resource type="Resource" id="Resource_o3kt1"]
+script = ExtResource("1_o3kt1")
+effect_type = 1
+amount = 3
+metadata/_custom_type_script = "uid://c07wl5mo5epjy"
+
+[sub_resource type="Resource" id="Resource_eppxx"]
+script = ExtResource("1_o3kt1")
+effect_type = 2
+amount = 1
+metadata/_custom_type_script = "uid://c07wl5mo5epjy"
+
+[resource]
+script = ExtResource("2_eppxx")
+card_id = "tactical_defense"
+card_name = "战术防御"
+description = "获得3点格挡，然后抽1张牌"
+card_type = 1
+base_energy_cost = 1
+effects = Array[ExtResource("1_o3kt1")]([SubResource("Resource_o3kt1"), SubResource("Resource_eppxx")])
+artwork = ExtResource("1_eppxx")
+metadata/_custom_type_script = "uid://drcw0copl04t2"

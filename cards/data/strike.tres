@@ -1,15 +1,21 @@
 [gd_resource type="Resource" script_class="CardDefinition" format=3 uid="uid://dkccfhg2cvceb"]
 
-[ext_resource type="Texture2D" uid="uid://dx3hmlg1cox4h" path="res://assets/images/strike.png" id="1_qirlp"]
+[ext_resource type="Texture2D" uid="uid://bxbdvcqpslos8" path="res://assets/images/new_strike.png" id="1_gwnax"]
 [ext_resource type="Script" uid="uid://drcw0copl04t2" path="res://cards/card_definition.gd" id="1_yjc4p"]
+[ext_resource type="Script" uid="uid://c07wl5mo5epjy" path="res://battle/actions/combat_effect_definition.gd" id="2_gwnax"]
+
+[sub_resource type="Resource" id="Resource_d7p88"]
+script = ExtResource("2_gwnax")
+target_type = 1
+amount = 6
+metadata/_custom_type_script = "uid://c07wl5mo5epjy"
 
 [resource]
 script = ExtResource("1_yjc4p")
 card_id = "strike"
 card_name = "打击"
 description = "造成6点伤害"
-target_type = 1
 base_energy_cost = 1
-base_damage_amount = 6
-artwork = ExtResource("1_qirlp")
+effects = Array[ExtResource("2_gwnax")]([SubResource("Resource_d7p88")])
+artwork = ExtResource("1_gwnax")
 metadata/_custom_type_script = "uid://drcw0copl04t2"

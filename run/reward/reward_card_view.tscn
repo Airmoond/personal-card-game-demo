@@ -1,0 +1,128 @@
+[gd_scene format=3 uid="uid://c2o7ouyltnttq"]
+
+[ext_resource type="Script" uid="uid://b20m41pvwrcgh" path="res://run/reward/reward_card_view.gd" id="1_ys8va"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ys8va"]
+bg_color = Color(0.08235294, 0.101960786, 0.13333334, 0.9490196)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.30980393, 0.39607844, 0.47843137, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_t3pxn"]
+bg_color = Color(0.0627451, 0.09019608, 0.1254902, 0.98039216)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.8901961, 0.60784316, 0.27058825, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_3y7ee"]
+bg_color = Color(0.13333334, 0.1882353, 0.2784314, 0.98039216)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.9490196, 0.7764706, 0.42745098, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bawm6"]
+bg_color = Color(0.0627451, 0.07058824, 0.09019608, 0.8509804)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.33333334, 0.3529412, 0.3882353, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_r16dr"]
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.31761202, 0.88663423, 0.9769295, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_cuaw8"]
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.24924722, 0.8907638, 0.99184376, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_467wm"]
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.18638605, 0.9083509, 0.90540904, 1)
+
+[node name="reward_card_view" type="Button" unique_id=1064970323]
+custom_minimum_size = Vector2(140, 200)
+offset_right = 140.0
+offset_bottom = 200.0
+mouse_default_cursor_shape = 2
+theme_override_styles/normal = SubResource("StyleBoxFlat_ys8va")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_t3pxn")
+theme_override_styles/hover = SubResource("StyleBoxFlat_3y7ee")
+theme_override_styles/disabled = SubResource("StyleBoxFlat_bawm6")
+disabled = true
+script = ExtResource("1_ys8va")
+
+[node name="cost_label" type="Label" parent="." unique_id=85122010]
+layout_mode = 0
+offset_left = 2.0
+offset_top = 2.0
+offset_right = 24.0
+offset_bottom = 29.0
+theme_override_styles/normal = SubResource("StyleBoxFlat_r16dr")
+text = "1"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="name_label" type="Label" parent="." unique_id=408577470]
+layout_mode = 0
+offset_left = 30.0
+offset_top = 2.0
+offset_right = 110.0
+offset_bottom = 29.0
+theme_override_styles/normal = SubResource("StyleBoxFlat_cuaw8")
+text = "名称"
+horizontal_alignment = 1
+
+[node name="artwork" type="TextureRect" parent="." unique_id=1387413338]
+layout_mode = 0
+offset_left = 8.0
+offset_top = 37.0
+offset_right = 132.0
+offset_bottom = 117.0
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 6
+
+[node name="description_label" type="RichTextLabel" parent="." unique_id=1124283368]
+layout_mode = 0
+offset_left = 8.0
+offset_top = 123.0
+offset_right = 132.0
+offset_bottom = 192.0
+mouse_filter = 2
+theme_override_styles/normal = SubResource("StyleBoxFlat_467wm")
+text = "卡牌效果"
+scroll_active = false
+horizontal_alignment = 1
+vertical_alignment = 1

@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="CardDefinition" format=3 uid="uid://bjplw014emciv"]
+
+[ext_resource type="Texture2D" uid="uid://7tdu730mxhp0" path="res://assets/images/attack_and_block.png" id="1_drl3e"]
+[ext_resource type="Script" uid="uid://c07wl5mo5epjy" path="res://battle/actions/combat_effect_definition.gd" id="1_sik7p"]
+[ext_resource type="Script" uid="uid://drcw0copl04t2" path="res://cards/card_definition.gd" id="2_drl3e"]
+
+[sub_resource type="Resource" id="Resource_sik7p"]
+script = ExtResource("1_sik7p")
+effect_type = 1
+amount = 3
+metadata/_custom_type_script = "uid://c07wl5mo5epjy"
+
+[sub_resource type="Resource" id="Resource_drl3e"]
+script = ExtResource("1_sik7p")
+target_type = 1
+amount = 4
+metadata/_custom_type_script = "uid://c07wl5mo5epjy"
+
+[resource]
+script = ExtResource("2_drl3e")
+card_id = "attack_and_block"
+card_name = "防守反击"
+description = "获得3点格挡，然后造成4点伤害"
+base_energy_cost = 1
+effects = Array[ExtResource("1_sik7p")]([SubResource("Resource_sik7p"), SubResource("Resource_drl3e")])
+artwork = ExtResource("1_drl3e")
+metadata/_custom_type_script = "uid://drcw0copl04t2"

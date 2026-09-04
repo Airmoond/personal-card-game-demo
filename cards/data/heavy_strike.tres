@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="CardDefinition" format=3 uid="uid://b13it27m0xp5u"]
+
+[ext_resource type="Texture2D" uid="uid://dxsrn1pm66doq" path="res://assets/images/heavy_strike.png" id="1_b8bl0"]
+[ext_resource type="Script" uid="uid://c07wl5mo5epjy" path="res://battle/actions/combat_effect_definition.gd" id="1_lytiv"]
+[ext_resource type="Script" uid="uid://drcw0copl04t2" path="res://cards/card_definition.gd" id="2_b8bl0"]
+
+[sub_resource type="Resource" id="Resource_lytiv"]
+script = ExtResource("1_lytiv")
+target_type = 1
+amount = 12
+metadata/_custom_type_script = "uid://c07wl5mo5epjy"
+
+[resource]
+script = ExtResource("2_b8bl0")
+card_id = "heavy_strike"
+card_name = "重击"
+description = "造成12点伤害"
+base_energy_cost = 2
+effects = Array[ExtResource("1_lytiv")]([SubResource("Resource_lytiv")])
+artwork = ExtResource("1_b8bl0")
+metadata/_custom_type_script = "uid://drcw0copl04t2"

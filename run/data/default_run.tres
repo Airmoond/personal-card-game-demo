@@ -1,0 +1,34 @@
+[gd_resource type="Resource" script_class="RunDefinition" format=3 uid="uid://cw44es8kse8ko"]
+
+[ext_resource type="Resource" uid="uid://5e1dath36ou0" path="res://run/map/data/first_map.tres" id="1_ru2sm"]
+[ext_resource type="Resource" uid="uid://df8b6i2mgvp8g" path="res://combatants/data/player.tres" id="2_yhjth"]
+[ext_resource type="Script" uid="uid://drcw0copl04t2" path="res://cards/card_definition.gd" id="3_yawxh"]
+[ext_resource type="Resource" uid="uid://b13it27m0xp5u" path="res://cards/data/heavy_strike.tres" id="4_eulsh"]
+[ext_resource type="Resource" uid="uid://d4dsmwtcj1p3m" path="res://cards/data/tactical_defense.tres" id="5_mvhlk"]
+[ext_resource type="Resource" uid="uid://bjplw014emciv" path="res://cards/data/attack_and_block.tres" id="6_at8wo"]
+[ext_resource type="Resource" uid="uid://bu8suls0nducp" path="res://cards/data/double_strike.tres" id="7_2itv6"]
+[ext_resource type="Script" uid="uid://mvsccx3x0y6g" path="res://run/data/run_definition.gd" id="8_hu8ss"]
+[ext_resource type="Script" uid="uid://dj8325adloygy" path="res://battle/data/deck_entry_definition.gd" id="9_0d20k"]
+[ext_resource type="Resource" uid="uid://dkccfhg2cvceb" path="res://cards/data/strike.tres" id="10_6d5u4"]
+[ext_resource type="Resource" uid="uid://bvu4nx4814o1r" path="res://cards/data/defend.tres" id="11_c4am4"]
+
+[sub_resource type="Resource" id="Resource_vrdjf"]
+script = ExtResource("9_0d20k")
+card_definition = ExtResource("10_6d5u4")
+count = 5
+metadata/_custom_type_script = "uid://dj8325adloygy"
+
+[sub_resource type="Resource" id="Resource_naw4q"]
+script = ExtResource("9_0d20k")
+card_definition = ExtResource("11_c4am4")
+count = 5
+metadata/_custom_type_script = "uid://dj8325adloygy"
+
+[resource]
+script = ExtResource("8_hu8ss")
+run_id = "default_run"
+player_definition = ExtResource("2_yhjth")
+starting_deck_entries = Array[ExtResource("9_0d20k")]([SubResource("Resource_vrdjf"), SubResource("Resource_naw4q")])
+map_definition = ExtResource("1_ru2sm")
+reward_pool = Array[ExtResource("3_yawxh")]([ExtResource("4_eulsh"), ExtResource("5_mvhlk"), ExtResource("6_at8wo"), ExtResource("7_2itv6")])
+metadata/_custom_type_script = "uid://mvsccx3x0y6g"

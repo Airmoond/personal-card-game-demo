@@ -1,7 +1,28 @@
 [gd_scene format=3 uid="uid://wjjvk8ky4p2m"]
 
-[ext_resource type="PackedScene" uid="uid://hh8u8a5llyha" path="res://battle/battle.tscn" id="1_ig7tw"]
+[ext_resource type="Script" uid="uid://c3owlln3awfj3" path="res://run/game_flow_controller.gd" id="1_ig7tw"]
+[ext_resource type="Resource" uid="uid://cw44es8kse8ko" path="res://run/data/default_run.tres" id="2_272bh"]
+[ext_resource type="PackedScene" uid="uid://b3pn6ri4pufim" path="res://run/screens/main_menu.tscn" id="3_5vw27"]
+[ext_resource type="PackedScene" uid="uid://cskpu0t02tqur" path="res://run/map/map_view.tscn" id="4_kek77"]
+[ext_resource type="PackedScene" uid="uid://hh8u8a5llyha" path="res://battle/battle.tscn" id="5_4c57u"]
+[ext_resource type="PackedScene" uid="uid://c6tm7stf7chex" path="res://run/reward/reward_view.tscn" id="6_efxa6"]
+[ext_resource type="PackedScene" uid="uid://c6vebaev1bmxj" path="res://run/screens/run_result.tscn" id="7_dg77c"]
 
 [node name="Main" type="Node" unique_id=1529406086]
 
-[node name="battle" parent="." unique_id=1249455180 instance=ExtResource("1_ig7tw")]
+[node name="page_container" type="Control" parent="." unique_id=1841393016]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="game_flow_controller" type="Node" parent="." unique_id=331691404]
+script = ExtResource("1_ig7tw")
+run_definition = ExtResource("2_272bh")
+main_menu_scene = ExtResource("3_5vw27")
+map_scene = ExtResource("4_kek77")
+battle_scene = ExtResource("5_4c57u")
+reward_scene = ExtResource("6_efxa6")
+result_scene = ExtResource("7_dg77c")
