@@ -7,7 +7,7 @@
 [sub_resource type="Resource" id="Resource_mdf6x"]
 script = ExtResource("1_mdf6x")
 target_type = 1
-amount = 3
+amount = 5
 repeat_count = 2
 metadata/_custom_type_script = "uid://c07wl5mo5epjy"
 
@@ -15,7 +15,7 @@ metadata/_custom_type_script = "uid://c07wl5mo5epjy"
 script = ExtResource("2_ny0v6")
 card_id = "double_strike"
 card_name = "双重打击"
-description = "造成3点伤害，共2次"
+description = "造成{damage_0}点伤害2次。"
 base_energy_cost = 1
 effects = Array[ExtResource("1_mdf6x")]([SubResource("Resource_mdf6x")])
 artwork = ExtResource("1_ny0v6")

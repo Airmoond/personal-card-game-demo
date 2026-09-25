@@ -169,11 +169,10 @@ func _clear_dynamic_content()->void:
 ##
 ## 该方法只读取数据并更新Label，不把标签中的文字反向作为游戏状态。
 func _refresh_run_info()->void:
-	var max_health:int = run_state.definition.player_definition.max_health;#最大生命读取只读玩家定义
 	health_label.text = "生命：%d / %d" % [
 		run_state.current_health,
-		max_health
-	];#组合运行时当前生命与静态最大生命
+		run_state.max_health
+	];#当前生命与最大生命都来自本局运行时状态。
 	deck_label.text = "牌组：%d张" % run_state.owned_cards.size();#每个CardDefinition元素代表实际拥有的一张卡
 
 

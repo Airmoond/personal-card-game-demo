@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="CardDefinition" format=3 uid="uid://bwx1gffi8kdeo"]
+
+[ext_resource type="Script" uid="uid://drcw0copl04t2" path="res://cards/card_definition.gd" id="1_card"]
+[ext_resource type="Script" uid="uid://c07wl5mo5epjy" path="res://battle/actions/combat_effect_definition.gd" id="2_effect"]
+
+[sub_resource type="Resource" id="Damage"]
+script = ExtResource("2_effect")
+target_type = 1
+amount = 8
+
+[sub_resource type="Resource" id="Vulnerable"]
+script = ExtResource("2_effect")
+effect_type = 8
+target_type = 1
+amount = 2
+
+[resource]
+script = ExtResource("1_card")
+card_id = "open_wound"
+card_name = "开放性伤口"
+description = "造成{damage_0}点伤害。给予2层易伤。"
+rarity = 1
+base_energy_cost = 2
+effects = Array[ExtResource("2_effect")]([SubResource("Damage"), SubResource("Vulnerable")])

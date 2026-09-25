@@ -1,6 +1,6 @@
 ## 显示一组静态卡牌奖励选项，并报告玩家最终选择的奖励卡。
 ##
-## GameFlowController以后从RunDefinition.reward_pool中无放回抽取候选卡牌，再通过
+## GameFlowController以后从CharacterDefinition.reward_card_pool中无放回抽取候选卡牌，再通过
 ## setup传入本页面。RewardView为每个CardDefinition创建一个RewardCardView，
 ## 管理整组卡牌的交互状态，并把首次有效选择继续报告给流程控制器。
 ##

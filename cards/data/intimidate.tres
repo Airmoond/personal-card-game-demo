@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CardDefinition" format=3 uid="uid://d0vd4prwvjxtm"]
+
+[ext_resource type="Script" uid="uid://drcw0copl04t2" path="res://cards/card_definition.gd" id="1_card"]
+[ext_resource type="Script" uid="uid://c07wl5mo5epjy" path="res://battle/actions/combat_effect_definition.gd" id="2_effect"]
+
+[sub_resource type="Resource" id="Vulnerable"]
+script = ExtResource("2_effect")
+effect_type = 8
+target_type = 1
+amount = 3
+
+[resource]
+script = ExtResource("1_card")
+card_id = "intimidate"
+card_name = "颤栗"
+description = "消耗。给予3层易伤。"
+card_type = 1
+exhausts_on_play = true
+base_energy_cost = 1
+effects = Array[ExtResource("2_effect")]([SubResource("Vulnerable")])

@@ -32,6 +32,18 @@ var current_health:int = 0;
 ## 格挡会优先抵消传入伤害，初始化时为0。
 var current_block:int = 0;
 
+## 每点力量增加每段攻击伤害，持续本场战斗，不逐回合衰减。
+var strength:int = 0;
+
+## 本场已获得的持续能力；数组归本角色所有，其中的定义保持只读。
+var powers:Array[PowerDefinition] = [];
+
+## 层数表示剩余整轮数，重复施加只延长时间，不增加倍率。
+var weak_turns:int = 0;
+var vulnerable_turns:int = 0;
+var _weak_skip_first_tick:bool = false;
+var _vulnerable_skip_first_tick:bool = false;
+
 
 ## 使用静态角色定义初始化当前运行时角色状态。
 ##
@@ -52,6 +64,7 @@ func combatant_init_from_definition(new_definition:CombatantDefinition)->bool:
 	max_health = new_definition.max_health;#从静态定义取得角色原本的最大生命
 	current_health = max_health;#新建战斗状态时让角色以满生命开始
 	current_block = 0;#新建战斗状态时不能继承上一场战斗的格挡
+	_reset_statuses();
 	return true;#所有运行时初始数据均已成功建立
 
 
@@ -71,7 +84,7 @@ func set_current_health(new_current_health:int)->bool:
 	if new_current_health <= 0:#下一场战斗只能接收仍然存活的玩家状态
 		push_error("新的当前生命必须大于0");#0生命应由整局失败流程处理，负数始终非法
 		return false;#非法生命不能覆盖当前已经建立的运行时状态
-	if new_current_health > max_health:#跨战斗保留的生命不能超过角色静态最大生命
+	if new_current_health > max_health:#跨战斗保留的生命不能超过本局实际最大生命
 		push_error("新的当前生命不能超过最大生命");#报告战斗回写或调用参数破坏了生命上限
 		return false;#拒绝通过静默截断掩盖上游状态错误
 
@@ -92,6 +105,46 @@ func combatant_init(new_name:String,max_hp:int)->void:
 	max_health = max_hp;
 	current_health = max_health;
 	current_block=0;
+	_reset_statuses();
+
+
+## 力量增益叠加到角色状态；正数由效果定义验证。
+func gain_strength(amount:int)->void:
+	strength += amount;
+
+
+func _reset_statuses()->void:
+	powers.clear();
+	strength = 0;
+	weak_turns = 0;
+	vulnerable_turns = 0;
+	_weak_skip_first_tick = false;
+	_vulnerable_skip_first_tick = false;
+
+
+## 敌人首次施加时跳过当轮递减；已有状态叠加时保留原来的递减安排。
+func apply_weak(turns:int, from_enemy:bool)->void:
+	if weak_turns == 0:
+		_weak_skip_first_tick = from_enemy;
+	weak_turns += turns;
+
+
+func apply_vulnerable(turns:int, from_enemy:bool)->void:
+	if vulnerable_turns == 0:
+		_vulnerable_skip_first_tick = from_enemy;
+	vulnerable_turns += turns;
+
+
+## 玩家和敌人都行动完后各调用一次；力量不参与递减。
+func tick_statuses_at_round_end()->void:
+	if _weak_skip_first_tick:
+		_weak_skip_first_tick = false;
+	elif weak_turns > 0:
+		weak_turns -= 1;
+	if _vulnerable_skip_first_tick:
+		_vulnerable_skip_first_tick = false;
+	elif vulnerable_turns > 0:
+		vulnerable_turns -= 1;
 
 
 ## 为角色增加指定数量的格挡。
@@ -113,6 +166,30 @@ func clear_block()->void:
 	current_block = 0;
 
 
+## 保留格挡去重；回合开始失血换格挡每次施加保留一份，按获得顺序独立触发。
+## 只保存只读定义的引用，不绑定来源卡牌的去向。
+func apply_power(power:PowerDefinition)->void:
+	match power.power_type:
+		PowerDefinition.PowerType.RETAIN_BLOCK:
+			if not has_power(power.power_type):
+				powers.append(power);
+		PowerDefinition.PowerType.TURN_START_HEALTH_FOR_BLOCK:
+			powers.append(power);
+
+
+func has_power(power_type:PowerDefinition.PowerType)->bool:
+	for power in powers:
+		if power.power_type == power_type:
+			return true;
+	return false;
+
+
+## 仅自动清理检查保留格挡；显式clear_block仍无条件清空。
+func clear_block_at_turn_start()->void:
+	if not has_power(PowerDefinition.PowerType.RETAIN_BLOCK):
+		clear_block();
+
+
 ## 让角色承受指定数量的伤害，并返回实际损失的生命值。
 ##
 ## damage_number小于或等于0时，不修改生命和格挡，并返回0。
@@ -122,18 +199,41 @@ func clear_block()->void:
 ## 伤害穿透格挡时返回本次实际减少的生命值。
 ## 发生超杀时只返回角色原本剩余的生命值。
 func take_damage(damage_number:int)->int:
-	var blocked_damage:int=0;#被格挡掉的伤害
-	var remaining_damage:int=0;#穿透格挡的伤害
-	var actual_hp_loss:int=0;#实际损失的hp值（防止超杀）
-	if damage_number <= 0:#如果伤害小于等于0，什么都不做
-		pass;
-	else:
-		blocked_damage=min(damage_number,current_block);#格挡掉的伤害=传入伤害和当前格挡的更小值
-		current_block-=blocked_damage;#当前格挡值减去被格挡掉的伤害
-		remaining_damage=damage_number-blocked_damage;#穿透伤害=传入伤害-被格挡的伤害
-		actual_hp_loss=min(remaining_damage,current_health);#实际失去生命=穿透伤害和当前生命的更小值
-		current_health-=actual_hp_loss;
+	if damage_number <= 0:
+		return 0;
+	var blocked_damage:int = mini(damage_number, current_block);
+	current_block -= blocked_damage;
+	return take_unblocked_damage(damage_number - blocked_damage);
+
+
+## 承受已经算好的非负伤害，直接扣生命并返回实际损失，不读取或修改格挡。
+## 普通伤害抵消格挡后的余量、无视格挡攻击均复用此入口；力量和倍率在上游计算。
+func take_unblocked_damage(damage_number:int)->int:
+	var actual_hp_loss:int = mini(current_health, damage_number);
+	current_health -= actual_hp_loss;
 	return actual_hp_loss;
+
+
+## 直接失去生命，绕过格挡和攻击计算，返回实际失去的生命值。
+## amount由效果定义验证为正数；生命最低为0。
+func lose_health(amount:int)->int:
+	var actual_loss:int = mini(current_health, amount);
+	current_health -= actual_loss;
+	return actual_loss;
+
+
+## 接收非负治疗量，恢复至多到当前最大生命，并返回实际恢复量。
+## 按伤害治疗直接传入本段造成的实际生命损失，完全格挡时为0。
+func heal(amount:int)->int:
+	var actual_heal:int = mini(amount, max_health - current_health);
+	current_health += actual_heal;
+	return actual_heal;
+
+
+## 出牌入口已确认能完整减少且至少剩1点上限；当前生命只压到新上限。
+func lose_max_health(amount:int)->void:
+	max_health -= amount;
+	current_health = mini(current_health, max_health);
 
 
 ## 判断角色当前是否存活。

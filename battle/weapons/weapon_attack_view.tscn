@@ -1,0 +1,8 @@
+[gd_scene format=3 uid="uid://c6601dpf3b3b2"]
+
+[node name="weapon_attack" type="Button" unique_id=1696649521]
+custom_minimum_size = Vector2(140, 200)
+mouse_default_cursor_shape = 2
+text = "武器攻击
+使用你的武器
+攻击敌人。"

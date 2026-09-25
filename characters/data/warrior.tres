@@ -1,0 +1,52 @@
+[gd_resource type="Resource" script_class="CharacterDefinition" format=3 uid="uid://cfqe1qhgscjt1"]
+
+[ext_resource type="Script" uid="uid://cpwhnqarfjks" path="res://characters/character_definition.gd" id="1_character"]
+[ext_resource type="Resource" uid="uid://df8b6i2mgvp8g" path="res://combatants/data/player.tres" id="2_player"]
+[ext_resource type="Script" uid="uid://dj8325adloygy" path="res://battle/data/deck_entry_definition.gd" id="3_deck_entry"]
+[ext_resource type="Script" uid="uid://drcw0copl04t2" path="res://cards/card_definition.gd" id="4_card"]
+[ext_resource type="Resource" uid="uid://dkccfhg2cvceb" path="res://cards/data/strike.tres" id="5_strike"]
+[ext_resource type="Resource" uid="uid://bvu4nx4814o1r" path="res://cards/data/defend.tres" id="6_defend"]
+[ext_resource type="Resource" uid="uid://b13it27m0xp5u" path="res://cards/data/heavy_strike.tres" id="7_heavy_strike"]
+[ext_resource type="Resource" uid="uid://d4dsmwtcj1p3m" path="res://cards/data/tactical_defense.tres" id="8_tactical_defense"]
+[ext_resource type="Resource" uid="uid://bjplw014emciv" path="res://cards/data/attack_and_block.tres" id="9_attack_and_block"]
+[ext_resource type="Resource" uid="uid://bu8suls0nducp" path="res://cards/data/double_strike.tres" id="10_double_strike"]
+[ext_resource type="Resource" uid="uid://b1mu3i6v11dam" path="res://cards/data/battle_trance.tres" id="11_battle_trance"]
+[ext_resource type="Resource" uid="uid://bvgxaul475kuo" path="res://cards/data/ancient_ritual.tres" id="12_ancient_ritual"]
+[ext_resource type="Resource" uid="uid://d0pmgohukkjos" path="res://cards/data/strength_power.tres" id="13_strength_power"]
+[ext_resource type="Resource" uid="uid://bwx1gffi8kdeo" path="res://cards/data/open_wound.tres" id="14_open_wound"]
+[ext_resource type="Resource" uid="uid://cbnhtii8vbirh" path="res://cards/data/thorns.tres" id="15_thorns"]
+[ext_resource type="Resource" uid="uid://cwpkdphdb8at" path="res://cards/data/uppercut.tres" id="16_uppercut"]
+[ext_resource type="Resource" uid="uid://4gvfn4b55lfi" path="res://cards/data/bloodthirsty_sword.tres" id="17_bloodthirsty_sword"]
+[ext_resource type="Resource" uid="uid://bm54p1vpy211d" path="res://cards/data/lethal_blade.tres" id="18_lethal_blade"]
+[ext_resource type="Resource" uid="uid://cq3pjb8wp72ef" path="res://cards/data/war_god_blessing.tres" id="19_war_god_blessing"]
+[ext_resource type="Resource" uid="uid://dglfa5cg1omgd" path="res://cards/data/fortress.tres" id="20_fortress"]
+[ext_resource type="Resource" uid="uid://brp6c6huqx8w7" path="res://cards/data/eternity.tres" id="21_eternity"]
+[ext_resource type="Resource" uid="uid://cv3qfiufbjqya" path="res://cards/data/blood_feast.tres" id="22_blood_feast"]
+[ext_resource type="Resource" uid="uid://b1iw4ynddjftg" path="res://cards/data/endless_power.tres" id="23_endless_power"]
+[ext_resource type="Resource" uid="uid://nlbj255taf2" path="res://cards/data/shield_slam.tres" id="24_shield_slam"]
+[ext_resource type="Resource" uid="uid://dojyto5as6dkc" path="res://cards/data/blood_sacrifice.tres" id="25_blood_sacrifice"]
+[ext_resource type="Resource" uid="uid://ctbtmgn0qb1mk" path="res://cards/data/technical_fighting.tres" id="26_technical_fighting"]
+[ext_resource type="Resource" uid="uid://ujpggio5sdwv" path="res://cards/data/overpower.tres" id="27_overpower"]
+[ext_resource type="Resource" uid="uid://d26jg2l0godcq" path="res://cards/data/blood_cloak.tres" id="28_blood_cloak"]
+[ext_resource type="Resource" uid="uid://bf0amoquwed4h" path="res://cards/data/pommel_strike.tres" id="29_pommel_strike"]
+[ext_resource type="Resource" uid="uid://bd74575r2yitl" path="res://cards/data/iron_wave.tres" id="30_iron_wave"]
+[ext_resource type="Resource" uid="uid://cvjlgpmobsbet" path="res://cards/data/shrug_it_off.tres" id="31_shrug_it_off"]
+[ext_resource type="Resource" uid="uid://d0vd4prwvjxtm" path="res://cards/data/intimidate.tres" id="32_intimidate"]
+[ext_resource type="Resource" uid="uid://ckotjqjdgv8k7" path="res://cards/data/trade_wounds.tres" id="33_trade_wounds"]
+
+[sub_resource type="Resource" id="DeckEntry_strike"]
+script = ExtResource("3_deck_entry")
+card_definition = ExtResource("5_strike")
+count = 3
+
+[sub_resource type="Resource" id="DeckEntry_defend"]
+script = ExtResource("3_deck_entry")
+card_definition = ExtResource("6_defend")
+count = 3
+
+[resource]
+script = ExtResource("1_character")
+character_id = "warrior"
+combatant_definition = ExtResource("2_player")
+starting_deck_entries = Array[ExtResource("3_deck_entry")]([SubResource("DeckEntry_strike"), SubResource("DeckEntry_defend")])
+reward_card_pool = Array[ExtResource("4_card")]([ExtResource("7_heavy_strike"), ExtResource("8_tactical_defense"), ExtResource("9_attack_and_block"), ExtResource("10_double_strike"), ExtResource("11_battle_trance"), ExtResource("12_ancient_ritual"), ExtResource("13_strength_power"), ExtResource("14_open_wound"), ExtResource("15_thorns"), ExtResource("16_uppercut"), ExtResource("17_bloodthirsty_sword"), ExtResource("18_lethal_blade"), ExtResource("19_war_god_blessing"), ExtResource("20_fortress"), ExtResource("21_eternity"), ExtResource("22_blood_feast"), ExtResource("23_endless_power"), ExtResource("24_shield_slam"), ExtResource("25_blood_sacrifice"), ExtResource("26_technical_fighting"), ExtResource("27_overpower"), ExtResource("28_blood_cloak"), ExtResource("29_pommel_strike"), ExtResource("30_iron_wave"), ExtResource("31_shrug_it_off"), ExtResource("32_intimidate"), ExtResource("33_trade_wounds")])

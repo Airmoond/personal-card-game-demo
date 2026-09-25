@@ -49,3 +49,28 @@ horizontal_alignment = 1
 layout_mode = 2
 text = "意图：未知"
 horizontal_alignment = 1
+
+[node name="strength_label" type="Label" parent="main_layout" unique_id=1999734467]
+visible = false
+layout_mode = 2
+text = "力量：0"
+horizontal_alignment = 1
+
+[node name="weak_label" type="Label" parent="main_layout" unique_id=470314878]
+visible = false
+layout_mode = 2
+text = "虚弱：0 回合"
+horizontal_alignment = 1
+
+[node name="vulnerable_label" type="Label" parent="main_layout" unique_id=1133441774]
+visible = false
+layout_mode = 2
+text = "易伤：0 回合"
+horizontal_alignment = 1
+
+[node name="power_label" type="Label" parent="main_layout" unique_id=1833104244]
+visible = false
+layout_mode = 2
+mouse_filter = 1
+text = "能力："
+horizontal_alignment = 1

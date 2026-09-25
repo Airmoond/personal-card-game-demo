@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="CardDefinition" format=3 uid="uid://d0pmgohukkjos"]
+
+[ext_resource type="Script" uid="uid://drcw0copl04t2" path="res://cards/card_definition.gd" id="1_card"]
+[ext_resource type="Script" uid="uid://c07wl5mo5epjy" path="res://battle/actions/combat_effect_definition.gd" id="2_effect"]
+
+[sub_resource type="Resource" id="GainStrength"]
+script = ExtResource("2_effect")
+effect_type = 6
+amount = 2
+
+[resource]
+script = ExtResource("1_card")
+card_id = "strength_power"
+card_name = "力量！！！"
+description = "获得2点力量。"
+card_type = 2
+rarity = 1
+base_energy_cost = 1
+effects = Array[ExtResource("2_effect")]([SubResource("GainStrength")])

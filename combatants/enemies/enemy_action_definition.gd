@@ -27,14 +27,14 @@ extends Resource
 ## 按照设计顺序保存本次敌人行动包含的全部战斗效果。
 ##
 ## 数组顺序就是控制器安排效果的顺序；其中每个元素都必须存在且合法。
-## 第二阶段敌人可以造成伤害或获得格挡，但不能配置DRAW效果。
+## 当前敌人支持伤害、格挡、力量、易伤、虚弱与持续能力，玩家专用效果不用于敌人行动。
 @export var effects:Array[CombatEffectDefinition] = []
 
 
 ## 检查当前敌人行动定义是否包含非法数据。
 ##
-## action_id或intent_text为空、effects为空，或者数组中存在null、非法效果或DRAW效果时，
-## 推送对应错误并返回true。所有字段均满足第二阶段规则时返回false。
+## action_id或intent_text为空、effects为空，或者数组中存在空、非法或仅玩家支持的效果时，
+## 推送对应错误并返回true。所有字段均满足当前规则时返回false。
 ## 该方法只验证静态配置，不会修复资源、推进敌人模式或执行任何效果。
 func is_invalid()->bool:
 	if action_id.is_empty():#每项敌人行动必须拥有稳定且非空的内部ID
@@ -55,8 +55,8 @@ func is_invalid()->bool:
 		if effect.is_invalid():#复用效果定义自身的类型、目标、数值和次数检查
 			push_error("Invalid effect! 敌人行动效果[%d]无效" % effect_index);#补充敌人行动中的位置上下文
 			return true;#任意一项效果非法时，整次敌人行动都不能使用
-		if effect.effect_type == CombatEffectDefinition.EffectType.DRAW:#当前牌堆系统只属于玩家
-			push_error("Invalid effect! 敌人行动不能包含DRAW效果");#在静态资源阶段阻止敌人抽取玩家卡牌
-			return true;#敌人抽牌无法被第二阶段规则正确表达
+		if effect.effect_type in [CombatEffectDefinition.EffectType.DRAW, CombatEffectDefinition.EffectType.GAIN_ENERGY, CombatEffectDefinition.EffectType.ENHANCE_WEAPON, CombatEffectDefinition.EffectType.LOSE_HEALTH, CombatEffectDefinition.EffectType.PREVENT_DRAW, CombatEffectDefinition.EffectType.LOSE_MAX_HEALTH, CombatEffectDefinition.EffectType.GAIN_ATTACK_CARD_ENERGY]:
+			push_error("敌人行动不能包含玩家专用效果");
+			return true;
 
 	return false;#全部静态字段和效果均合法，当前敌人行动定义可以使用

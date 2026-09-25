@@ -1,0 +1,22 @@
+[gd_scene format=3]
+
+[sub_resource type="StyleBoxFlat" id="Row"]
+bg_color = Color(0.12, 0.16, 0.21, 0.95)
+content_margin_left = 14.0
+content_margin_right = 14.0
+content_margin_top = 7.0
+content_margin_bottom = 7.0
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_left = 5
+corner_radius_bottom_right = 5
+
+[node name="deck_card_row" type="Label"]
+custom_minimum_size = Vector2(0, 34)
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.88, 0.9, 0.94, 1)
+theme_override_font_sizes/font_size = 18
+theme_override_styles/normal = SubResource("Row")
+text = "卡牌名称"
+vertical_alignment = 1

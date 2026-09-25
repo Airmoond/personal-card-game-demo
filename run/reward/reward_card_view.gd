@@ -38,24 +38,13 @@ var card_definition:CardDefinition
 var _selection_reported:bool = false
 
 
-## 显示卡牌基础能量费用。
-@onready var cost_label:Label = $cost_label
-
-
-## 显示卡牌名称。
-@onready var name_label:Label = $name_label
-
-
-## 显示卡牌静态原画。
-@onready var artwork:TextureRect = $artwork
-
-
-## 显示卡牌效果说明。
-@onready var description_label:RichTextLabel = $description_label
+## 与手牌共用卡面；此处只处理静态定义与选牌输入。
+@onready var card_face:CardFace = $card_face
 
 
 ## 连接根Button的点击信号，并保持组件初始不可交互。
 func _ready()->void:
+	custom_minimum_size = card_face.get_combined_minimum_size();
 	pressed.connect(_on_pressed);#把根Button的点击统一交给当前组件的私有处理方法
 	set_interactable(false);#绑定CardDefinition前保持禁用，并同步显示灰暗外观
 
@@ -109,10 +98,8 @@ func _refresh_visual()->void:
 		push_error("当前奖励卡牌定义无效，无法刷新奖励卡界面");#补充奖励卡View层的错误上下文
 		return;#非法定义不能覆盖当前显示内容
 
-	cost_label.text = str(card_definition.base_energy_cost);#整数费用转换为Label需要的字符串
-	name_label.text = card_definition.card_name;#显示面向玩家的静态卡牌名称
-	artwork.texture = card_definition.artwork;#原画允许为空，此时TextureRect保持无纹理显示
-	description_label.text = card_definition.description;#显示静态卡牌效果说明，不解释或执行效果
+	card_face.show_card(card_definition, card_definition.base_energy_cost);
+	tooltip_text = card_face.tooltip_text;
 
 
 ## 接收根Button的首次有效点击并报告选择。

@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="PowerDefinition" format=3]
+
+[ext_resource type="Script" path="res://battle/powers/power_definition.gd" id="1_power"]
+
+[resource]
+script = ExtResource("1_power")
+display_name = "坚城"
+description = "本场战斗中，回合开始时不再自动清空格挡。重复施加不叠加。"

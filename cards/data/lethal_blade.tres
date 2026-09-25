@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="CardDefinition" format=3 uid="uid://bm54p1vpy211d"]
+
+[ext_resource type="Script" uid="uid://drcw0copl04t2" path="res://cards/card_definition.gd" id="1_card"]
+[ext_resource type="Script" uid="uid://c07wl5mo5epjy" path="res://battle/actions/combat_effect_definition.gd" id="1_yuvwy"]
+[ext_resource type="Script" uid="uid://j62orvc63hae" path="res://battle/weapons/weapon_definition.gd" id="2_weapon"]
+
+[sub_resource type="Resource" id="Weapon"]
+script = ExtResource("2_weapon")
+base_attack = 15
+base_max_durability = 2
+ignores_block = true
+
+[resource]
+script = ExtResource("1_card")
+card_id = "lethal_blade"
+card_name = "致命之刃"
+description = "15攻击力/2耐久度
+该武器的攻击无视敌人的格挡。"
+card_type = 3
+rarity = 2
+weapon_definition = SubResource("Weapon")
+base_energy_cost = 3

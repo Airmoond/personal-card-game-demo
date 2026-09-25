@@ -1,0 +1,112 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://cards/card_face.gd" id="1_face"]
+[ext_resource type="Script" path="res://cards/card_description_label.gd" id="2_description"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_r16dr"]
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.31761202, 0.88663423, 0.9769295, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_cuaw8"]
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.24924722, 0.8907638, 0.99184376, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_467wm"]
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.18638605, 0.9083509, 0.90540904, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_u3yia"]
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.47065133, 0.87077624, 0.9378754, 1)
+
+[node name="card_face" type="Control"]
+custom_minimum_size = Vector2(140, 200)
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_face")
+
+[node name="cost_label" type="Label" parent="." unique_id=85122010]
+layout_mode = 0
+offset_left = 2.0
+offset_top = 2.0
+offset_right = 24.0
+offset_bottom = 29.0
+theme_override_styles/normal = SubResource("StyleBoxFlat_r16dr")
+text = "1"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="name_label" type="Label" parent="." unique_id=408577470]
+layout_mode = 0
+offset_left = 30.0
+offset_top = 2.0
+offset_right = 110.0
+offset_bottom = 29.0
+theme_override_styles/normal = SubResource("StyleBoxFlat_cuaw8")
+text = "名称"
+horizontal_alignment = 1
+
+[node name="artwork" type="TextureRect" parent="." unique_id=1387413338]
+layout_mode = 0
+offset_left = 8.0
+offset_top = 37.0
+offset_right = 132.0
+offset_bottom = 117.0
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 6
+
+[node name="description_label" type="RichTextLabel" parent="." unique_id=1124283368]
+layout_mode = 0
+offset_left = 8.0
+offset_top = 123.0
+offset_right = 132.0
+offset_bottom = 174.0
+mouse_filter = 2
+theme_override_font_sizes/normal_font_size = 12
+theme_override_styles/normal = SubResource("StyleBoxFlat_467wm")
+script = ExtResource("2_description")
+text = "卡牌效果"
+scroll_active = false
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="cardtype_label" type="Label" parent="." unique_id=1823029263]
+layout_mode = 0
+offset_left = 51.0
+offset_top = 176.0
+offset_right = 91.0
+offset_bottom = 192.0
+theme_override_font_sizes/font_size = 8
+theme_override_styles/normal = SubResource("StyleBoxFlat_u3yia")
+text = "类型"
+horizontal_alignment = 1
+vertical_alignment = 2
+
+[node name="expansion_type_label" type="Label" parent="." unique_id=1243021648]
+layout_mode = 0
+offset_left = 114.0
+offset_top = 2.0
+offset_right = 136.0
+offset_bottom = 29.0
+theme_override_styles/normal = SubResource("StyleBoxFlat_r16dr")
+text = "标"
+horizontal_alignment = 1
+vertical_alignment = 1

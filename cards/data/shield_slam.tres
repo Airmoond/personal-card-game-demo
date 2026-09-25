@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="CardDefinition" format=3 uid="uid://nlbj255taf2"]
+
+[ext_resource type="Script" uid="uid://drcw0copl04t2" path="res://cards/card_definition.gd" id="1_card"]
+[ext_resource type="Script" uid="uid://c07wl5mo5epjy" path="res://battle/actions/combat_effect_definition.gd" id="2_effect"]
+
+[sub_resource type="Resource" id="Damage"]
+script = ExtResource("2_effect")
+target_type = 1
+damage_source = 1
+
+[resource]
+script = ExtResource("1_card")
+card_id = "shield_slam"
+card_name = "盾牌猛击"
+description = "造成等同于你当前格挡值的伤害。
+（当前造成{damage_0}点伤害）"
+rarity = 2
+base_energy_cost = 1
+effects = Array[ExtResource("2_effect")]([SubResource("Damage")])

@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="CardDefinition" format=3 uid="uid://b1mu3i6v11dam"]
+
+[ext_resource type="Script" uid="uid://drcw0copl04t2" path="res://cards/card_definition.gd" id="1_card"]
+[ext_resource type="Script" uid="uid://c07wl5mo5epjy" path="res://battle/actions/combat_effect_definition.gd" id="2_effect"]
+
+[sub_resource type="Resource" id="Draw"]
+script = ExtResource("2_effect")
+effect_type = 2
+amount = 3
+
+[sub_resource type="Resource" id="PreventDraw"]
+script = ExtResource("2_effect")
+effect_type = 10
+
+[resource]
+script = ExtResource("1_card")
+card_id = "battle_trance"
+card_name = "背水一战"
+description = "抽3张牌。本回合你不能再抽牌。"
+card_type = 1
+rarity = 1
+effects = Array[ExtResource("2_effect")]([SubResource("Draw"), SubResource("PreventDraw")])

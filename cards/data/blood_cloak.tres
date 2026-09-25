@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CardDefinition" format=3 uid="uid://d26jg2l0godcq"]
+
+[ext_resource type="Script" uid="uid://drcw0copl04t2" path="res://cards/card_definition.gd" id="1_card"]
+[ext_resource type="Script" uid="uid://c07wl5mo5epjy" path="res://battle/actions/combat_effect_definition.gd" id="2_effect"]
+[ext_resource type="Resource" path="res://battle/powers/data/blood_cloak.tres" id="3_power"]
+
+[sub_resource type="Resource" id="ApplyPower"]
+script = ExtResource("2_effect")
+effect_type = 9
+power_definition = ExtResource("3_power")
+
+[resource]
+script = ExtResource("1_card")
+card_id = "blood_cloak"
+card_name = "血红披风"
+description = "每个玩家回合开始时，失去1生命值，获得10点格挡。"
+card_type = 2
+rarity = 2
+base_energy_cost = 1
+effects = Array[ExtResource("2_effect")]([SubResource("ApplyPower")])

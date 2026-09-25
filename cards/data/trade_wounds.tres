@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="CardDefinition" format=3 uid="uid://ckotjqjdgv8k7"]
+
+[ext_resource type="Script" uid="uid://drcw0copl04t2" path="res://cards/card_definition.gd" id="1_card"]
+[ext_resource type="Script" uid="uid://c07wl5mo5epjy" path="res://battle/actions/combat_effect_definition.gd" id="2_effect"]
+
+[sub_resource type="Resource" id="LoseHealth"]
+script = ExtResource("2_effect")
+effect_type = 5
+amount = 1
+
+[sub_resource type="Resource" id="Damage"]
+script = ExtResource("2_effect")
+target_type = 1
+amount = 12
+
+[resource]
+script = ExtResource("1_card")
+card_id = "trade_wounds"
+card_name = "以伤换伤"
+description = "失去1点生命。造成{damage_1}点伤害。"
+card_type = 1
+base_energy_cost = 1
+effects = Array[ExtResource("2_effect")]([SubResource("LoseHealth"), SubResource("Damage")])

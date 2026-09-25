@@ -1,8 +1,8 @@
 ## 描述起始牌组中一种卡牌及其配置数量的静态资源。
 ##
 ## 每个DeckEntryDefinition引用一份CardDefinition，并用count表示这种卡牌需要
-## 放入起始牌组的数量。EncounterDefinition以后会保存多个牌组条目，控制器再根据
-## 每个条目的count创建对应数量、彼此独立的CardInstance。
+## 放入起始牌组的数量。CharacterDefinition保存多个条目，RunState将其展开为实际牌组，
+## 每场战斗再根据实际牌组创建彼此独立的CardInstance。
 ##
 ## 该资源在战斗过程中必须视为只读数据。它不创建CardInstance，不记录卡牌所在牌堆，
 ## 也不直接修改BattleState中的抽牌堆、手牌或弃牌堆。

@@ -22,22 +22,32 @@ enum RunStatus {
 	VICTORY,
 
 	## 玩家已经在战斗中失败，整局流程不再允许继续推进。
-	DEFEAT
+	DEFEAT,
+
+	## 正在逐轮构筑初始牌组，完成后才允许进入地图。
+	DRAFTING
 }
+
+## 已完成的选牌轮数，也是当前轮在DRAFT_RARITIES中的下标。
+var draft_round:int = 0;
 
 
 ## 创建当前运行时冒险所使用的静态定义资源。
 ##
-## 成功初始化后保存传入RunDefinition的只读引用，用于查询玩家最大生命、地图结构
+## 成功初始化后保存传入RunDefinition的只读引用，用于查询玩家初始最大生命、地图结构
 ## 和其他固定规则。运行时不得修改该资源或它引用的任何.tres内容。
 var definition:RunDefinition
 
 
 ## 玩家在当前整局冒险中剩余的生命值。
 ##
-## 初始化时等于player_definition.max_health；战斗结束时由GameFlowController回写，
+## 初始化时等于角色combatant_definition.max_health；战斗结束时由GameFlowController回写，
 ## 休整时由RunState.heal修改。该数值不能超过玩家最大生命，也不能小于0。
 var current_health:int = 0
+
+
+## 本局实际最大生命；新冒险从静态定义初始化，战斗结束时同步永久变化。
+var max_health:int = 0
 
 
 ## 玩家在当前整局冒险中实际拥有的全部卡牌定义引用。
@@ -70,16 +80,36 @@ var completed_node_ids:Array[String] = []
 
 ## 当前整局冒险的运行状态。
 ##
-## 新对象默认为SETUP；成功初始化后变为IN_PROGRESS，最终由结算方法切换为
+## 新对象默认为SETUP；成功初始化后变为DRAFTING，选满三轮后变为IN_PROGRESS，最终由结算方法切换为
 ## VICTORY或DEFEAT。
 var status:RunStatus = RunStatus.SETUP
+
+
+## 只在DRAFTING阶段查询；轮次由初始化和choose_starting_card推进。
+func get_draft_rarity()->int:
+	return RunDefinition.DRAFT_RARITIES[draft_round];
+
+
+## 单轮选择直接加入真实牌组；静态卡牌合法性已由冒险定义验证。
+func choose_starting_card(card:CardDefinition)->bool:
+	if status != RunStatus.DRAFTING:
+		return false;
+	if not definition.character_definition.reward_card_pool.has(card):
+		return false;
+	if card.rarity != get_draft_rarity():
+		return false;
+	owned_cards.append(card);
+	draft_round += 1;
+	if draft_round == RunDefinition.DRAFT_RARITIES.size():
+		status = RunStatus.IN_PROGRESS;
+	return true;
 
 
 ## 使用一份静态冒险定义初始化全新的局内运行时状态。
 ##
 ## new_definition为空或定义非法时推送错误，保持当前RunState原有数据不变并返回false。
 ## 定义合法时，先在局部数组中按照DeckEntryDefinition.count展开初始牌组，并复制
-## 地图起点；全部准备成功后再提交定义、满生命、牌组、地图进度和IN_PROGRESS状态。
+## 地图起点；全部准备成功后再提交定义、满生命、牌组、地图进度和DRAFTING状态。
 ##
 ## owned_cards中的重复CardDefinition引用代表多张同名卡，属于合法状态。
 ## 该方法只复制数组结构和静态资源引用，不创建CardInstance，也不修改任何静态资源。
@@ -91,29 +121,25 @@ func run_state_init(new_definition:RunDefinition)->bool:
 		push_error("冒险定义无效，局内状态初始化失败");#补充运行时初始化阶段的错误上下文
 		return false;#非法静态数据不能成为局内状态的数据来源
 
+	var character:CharacterDefinition = new_definition.character_definition;
 	var initial_owned_cards:Array[CardDefinition] = [];#局部保存展开后的实际拥有卡牌，避免产生半成品状态
-	for deck_entry in new_definition.starting_deck_entries:#按照静态牌组条目的配置顺序展开初始牌组
+	for deck_entry in character.starting_deck_entries:#按照角色基础牌组的配置顺序展开
 		for _card_index in range(deck_entry.count):#count决定本局实际拥有这种卡牌的数量
 			initial_owned_cards.append(deck_entry.card_definition);#每个元素代表一张卡，但共享同一份只读定义
-
-	if initial_owned_cards.is_empty():#合法定义正常不会触发，保留防御性检查避免提交空牌组
-		push_error("初始牌组展开结果为空，局内状态初始化失败");#报告无法建立实际拥有卡牌列表
-		return false;#局部构建失败时保持当前RunState原有数据不变
 
 	var initial_available_node_ids:Array[String] = (
 		new_definition.map_definition.starting_node_ids.duplicate()
 	);#复制静态起点数组，防止后续运行时移除节点时污染MapDefinition
-	if initial_available_node_ids.is_empty():#合法地图正常至少拥有一个起点
-		push_error("地图起点复制结果为空，局内状态初始化失败");#报告无法建立初始可进入节点
-		return false;#未准备好完整地图进度前不提交任何新状态
 
 	definition = new_definition;#保存静态冒险定义的只读引用
-	current_health = new_definition.player_definition.max_health;#新冒险从玩家定义的满生命开始
+	max_health = character.combatant_definition.max_health;
+	current_health = max_health;#新冒险恢复角色原始上限并从满生命开始。
 	owned_cards = initial_owned_cards;#提交已经完整展开的本局实际拥有卡牌列表
 	current_node_id = "";#新冒险尚未进入任何地图节点
 	available_node_ids = initial_available_node_ids;#提交独立于静态地图数组的初始可进入节点列表
 	completed_node_ids.clear();#全新冒险不能继承此前已经完成的节点
-	status = RunStatus.IN_PROGRESS;#全部运行时数据建立完成后，最后允许流程正式推进
+	draft_round = 0;
+	status = RunStatus.DRAFTING;#先逐轮选牌，再开放地图。
 
 	return true;#当前RunState已经完整初始化，可以交给GameFlowController使用
 
@@ -141,15 +167,17 @@ func is_invalid()->bool:
 		push_error("整局状态仍为SETUP，局内状态尚未完成初始化");#报告对象仍是未提交状态
 		return true;#未初始化对象不能交给页面和流程控制器使用
 
-	var max_health:int = definition.player_definition.max_health;#最大生命始终读取只读玩家定义
+	if max_health <= 0:
+		push_error("本局最大生命必须大于0");
+		return true;
 	if current_health < 0:#生命最低只能为0，不能出现负数运行时数据
 		push_error("当前生命小于0，局内状态非法");#报告战斗回写或治疗计算破坏了生命下限
 		return true;#负生命不能继续传入下一场战斗
-	if current_health > max_health:#跨战斗生命不能超过玩家定义中的基础最大生命
+	if current_health > max_health:#跨战斗生命不能超过本局实际最大生命
 		push_error("当前生命超过最大生命，局内状态非法");#报告生命回写或治疗没有正确限制上限
 		return true;#超出静态最大值的生命状态不能使用
 	if (
-		status == RunStatus.IN_PROGRESS or status == RunStatus.VICTORY
+		status in [RunStatus.DRAFTING, RunStatus.IN_PROGRESS, RunStatus.VICTORY]
 	) and current_health == 0:#仍在冒险或已经胜利都意味着玩家必须存活
 		push_error("进行中或胜利状态的玩家生命为0，局内状态非法");#报告生命与整局状态互相冲突
 		return true;#死亡玩家不能继续流程，也不能取得Boss胜利
@@ -321,7 +349,7 @@ func complete_current_node()->bool:
 ##
 ## 该方法允许同一个CardDefinition或card_id重复出现，因为每次追加都代表玩家
 ## 额外获得了一张同名卡。它不创建CardInstance、不修改卡牌资源，也不要求卡牌
-## 必须来自reward_pool；奖励候选是否合法由GameFlowController在调用前负责确认。
+## 必须来自角色reward_card_pool；奖励候选是否合法由GameFlowController在调用前负责确认。
 func add_card(card_definition:CardDefinition)->bool:
 	if is_invalid():#损坏的生命、牌组或地图进度不能继续接受新的运行时变化
 		push_error("当前局内状态无效，无法添加卡牌");#补充卡牌成长阶段的错误上下文
@@ -343,7 +371,7 @@ func add_card(card_definition:CardDefinition)->bool:
 ##
 ## 当前RunState非法、整局不处于IN_PROGRESS或amount小于等于0时，保持生命不变
 ## 并返回0。参数合法时，实际恢复量取amount与“最大生命减当前生命”中的较小值，
-## 因此治疗不会让current_health超过玩家定义中的最大生命。
+## 因此治疗不会让current_health超过本局实际最大生命。
 ##
 ## 该方法只执行通用局内治疗规则，不检查当前节点是否为REST，也不读取或修改
 ## MapNodeDefinition.heal_amount；治疗时机和传入数值由GameFlowController负责决定。
@@ -357,7 +385,6 @@ func heal(amount:int)->int:
 		push_error("治疗量必须大于0");#报告调用方传入零或负数治疗配置
 		return 0;#非法数值不能改变玩家生命
 
-	var max_health:int = definition.player_definition.max_health;#最大生命始终读取只读玩家定义
 	var missing_health:int = max_health - current_health;#计算当前距离满生命还缺少多少点
 	if missing_health <= 0:#玩家已经满生命时不存在可以实际恢复的空间
 		return 0;#不修改生命，并明确报告本次实际恢复量为0

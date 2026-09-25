@@ -1,7 +1,7 @@
 ## 表示战斗中一张具体卡牌的运行时实例。
 ##
 ## 每个实例引用一份CardDefinition，并独立保存本场战斗中的临时数据。
-## 多个CardInstance可以引用同一份CardDefinition，但彼此的当前费用互不影响。
+## 多个CardInstance可以引用同一份CardDefinition，但彼此的费用、武器强化和耐久互不影响。
 class_name CardInstance;
 extends RefCounted
 
@@ -18,11 +18,17 @@ var definition:CardDefinition;
 var current_energy_cost:int;
 
 
+## 武器牌独有的本场状态；普通卡牌为null。
+## 只由卡牌单向持有，武器状态不反向持有卡牌，避免RefCounted循环引用。
+var weapon:WeaponInstance;
+
+
 ## 使用传入的卡牌定义初始化当前卡牌实例。
 ##
 ## 如果card_def为null，返回false，且不修改当前实例。
 ## 如果card_def的定义无效，返回false，且不修改当前实例。
 ## 初始化成功时，保存definition引用，将current_energy_cost设置为基础费用，并返回true。
+## 武器牌创建新的武器状态；这是新战斗初始化，回手重装不能再次调用本方法。
 func card_instance_init(card_def:CardDefinition)->bool:
 	if card_def == null:
 		return false;
@@ -31,6 +37,11 @@ func card_instance_init(card_def:CardDefinition)->bool:
 	
 	definition = card_def;#检查合格后，把外部传进来的定义赋给definition
 	current_energy_cost = card_def.base_energy_cost;
+	weapon = (
+		WeaponInstance.new(card_def.weapon_definition)
+		if card_def.card_type == CardDefinition.CardType.WEAPON
+		else null
+	);
 	return true;
 
 

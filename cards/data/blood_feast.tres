@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CardDefinition" format=3 uid="uid://cv3qfiufbjqya"]
+
+[ext_resource type="Script" uid="uid://drcw0copl04t2" path="res://cards/card_definition.gd" id="1_card"]
+[ext_resource type="Script" uid="uid://c07wl5mo5epjy" path="res://battle/actions/combat_effect_definition.gd" id="2_effect"]
+
+[sub_resource type="Resource" id="Damage"]
+script = ExtResource("2_effect")
+target_type = 1
+amount = 10
+heals_from_damage = true
+
+[resource]
+script = ExtResource("1_card")
+card_id = "blood_feast"
+card_name = "鲜血狂宴"
+description = "消耗。造成{damage_0}点伤害，并回复等同于伤害量的生命值。"
+rarity = 3
+exhausts_on_play = true
+base_energy_cost = 2
+effects = Array[ExtResource("2_effect")]([SubResource("Damage")])

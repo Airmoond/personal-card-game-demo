@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="CardDefinition" format=3 uid="uid://ctbtmgn0qb1mk"]
+
+[ext_resource type="Script" uid="uid://drcw0copl04t2" path="res://cards/card_definition.gd" id="1_card"]
+[ext_resource type="Script" uid="uid://c07wl5mo5epjy" path="res://battle/actions/combat_effect_definition.gd" id="2_effect"]
+
+[sub_resource type="Resource" id="Weak"]
+script = ExtResource("2_effect")
+effect_type = 7
+target_type = 1
+amount = 2
+
+[sub_resource type="Resource" id="Draw"]
+script = ExtResource("2_effect")
+effect_type = 2
+amount = 3
+
+[resource]
+script = ExtResource("1_card")
+card_id = "technical_fighting"
+card_name = "技巧型格斗"
+description = "消耗。给予2层虚弱。抽3张牌。"
+card_type = 1
+rarity = 2
+exhausts_on_play = true
+base_energy_cost = 1
+effects = Array[ExtResource("2_effect")]([SubResource("Weak"), SubResource("Draw")])

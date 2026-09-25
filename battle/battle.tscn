@@ -66,12 +66,20 @@ offset_top = 188.0
 offset_right = 436.0
 offset_bottom = 448.0
 
+[node name="weapon_label" type="Label" parent="main_layout/player_area" unique_id=188217234]
+layout_mode = 0
+offset_left = 402.0
+offset_top = 369.0
+offset_right = 726.0
+offset_bottom = 427.0
+text = "武器：未装备"
+
 [node name="battle_info_area" type="VBoxContainer" parent="main_layout" unique_id=1197807532]
 layout_mode = 1
 anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
-offset_top = -110.0
+offset_top = -140.0
 offset_right = 166.0
 grow_vertical = 0
 mouse_filter = 2
@@ -90,6 +98,11 @@ horizontal_alignment = 1
 [node name="discard_pile_label" type="Label" parent="main_layout/battle_info_area" unique_id=1834091141]
 layout_mode = 2
 text = "弃牌堆：0"
+horizontal_alignment = 1
+
+[node name="exhaust_pile_label" type="Label" parent="main_layout/battle_info_area" unique_id=1443763427]
+layout_mode = 2
+text = "消耗牌：0"
 horizontal_alignment = 1
 
 [node name="hand_area" type="HBoxContainer" parent="main_layout" unique_id=1888169406]

@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="CardDefinition" format=3 uid="uid://b1iw4ynddjftg"]
+
+[ext_resource type="Script" uid="uid://drcw0copl04t2" path="res://cards/card_definition.gd" id="1_card"]
+[ext_resource type="Script" uid="uid://c07wl5mo5epjy" path="res://battle/actions/combat_effect_definition.gd" id="2_effect"]
+
+[sub_resource type="Resource" id="Damage"]
+script = ExtResource("2_effect")
+target_type = 1
+amount = 6
+
+[sub_resource type="Resource" id="AttackCardEnergy"]
+script = ExtResource("2_effect")
+effect_type = 12
+amount = 1
+
+[resource]
+script = ExtResource("1_card")
+card_id = "endless_power"
+card_name = "无尽之力"
+description = "消耗。造成{damage_0}点伤害。在本回合的剩余时间内，你每打出一张攻击牌，就回复1点能量。"
+rarity = 3
+exhausts_on_play = true
+effects = Array[ExtResource("2_effect")]([SubResource("Damage"), SubResource("AttackCardEnergy")])

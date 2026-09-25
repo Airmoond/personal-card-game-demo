@@ -26,6 +26,14 @@ var combatant_state:CombatantState;
 ## 用于显示角色当前格挡值。
 @onready var block_label:Label = $main_layout/block_label;
 
+## 玩家与敌人共用的力量、虚弱与易伤显示。
+@onready var strength_label:Label = $main_layout/strength_label;
+@onready var weak_label:Label = $main_layout/weak_label;
+@onready var vulnerable_label:Label = $main_layout/vulnerable_label;
+
+## 显示本场持续能力名称，悬停时显示规则说明。
+@onready var power_label:Label = $main_layout/power_label;
+
 ## 用于显示敌人下一步行动意图。
 @onready var intent_label:Label = $main_layout/enemy_intent_label;
 
@@ -45,9 +53,9 @@ func bind_combatant_state(new_combatant_state:CombatantState)->bool:
 	return true;
 
 
-## 根据当前绑定的CombatantState刷新角色名称、原画、生命和格挡显示。
+## 根据当前绑定的CombatantState刷新角色名称、原画、生命、格挡和状态显示。
 ##
-## combatant_state.definition存在时，名称、最大生命和原画来自静态角色定义，
+## combatant_state.definition存在时，名称和原画来自静态角色定义，
 ## 当前生命和格挡来自运行时状态。
 ## definition为空时，迁移期间继续使用combatant_name和max_health显示旧测试角色。
 ## 该方法只读取数据并更新界面，不修改CombatantDefinition或CombatantState。
@@ -57,7 +65,7 @@ func refresh_combatant_view()->void:
 		return;#保持当前界面内容不变
 
 	var display_name:String = combatant_state.combatant_name;#默认兼容旧combatant_init初始化的测试角色
-	var display_max_health:int = combatant_state.max_health;#默认使用旧运行时字段中的最大生命
+	var display_max_health:int = combatant_state.max_health;# 最大生命始终读取运行时状态。
 	var display_artwork:Texture2D = null;#旧测试角色没有静态原画时清空图片，避免残留旧纹理
 
 	if combatant_state.definition != null:#新初始化路径已经绑定静态角色定义
@@ -65,7 +73,6 @@ func refresh_combatant_view()->void:
 			push_error("当前角色定义无效，角色界面刷新失败");#报告静态显示数据不可用
 			return;#非法定义不能覆盖当前界面
 		display_name = combatant_state.definition.display_name;#角色名称来自静态定义
-		display_max_health = combatant_state.definition.max_health;#最大生命来自静态定义
 		display_artwork = combatant_state.definition.artwork;#角色原画来自静态定义
 
 	name_label.text = display_name;#显示静态定义名称或迁移期旧名称
@@ -75,9 +82,23 @@ func refresh_combatant_view()->void:
 	health_label.text = "%d / %d" % [
 		combatant_state.current_health,
 		display_max_health
-	];#组合运行时当前生命与静态最大生命
+	];#组合运行时当前生命与最大生命
 	block_label.text = "格挡：%d" % combatant_state.current_block;#当前格挡始终读取运行时真实状态
 	block_label.visible = combatant_state.current_block > 0;#格挡为0时隐藏标签
+	strength_label.text = "力量：%d" % combatant_state.strength;
+	strength_label.visible = combatant_state.strength != 0;
+	weak_label.text = "虚弱：%d 回合" % combatant_state.weak_turns;
+	weak_label.visible = combatant_state.weak_turns > 0;
+	vulnerable_label.text = "易伤：%d 回合" % combatant_state.vulnerable_turns;
+	vulnerable_label.visible = combatant_state.vulnerable_turns > 0;
+	var power_names:PackedStringArray = [];
+	var power_descriptions:PackedStringArray = [];
+	for power in combatant_state.powers:
+		power_names.append(power.display_name);
+		power_descriptions.append("%s：%s" % [power.display_name, power.description]);
+	power_label.text = "能力：" + "、".join(power_names);
+	power_label.tooltip_text = "\n".join(power_descriptions);
+	power_label.visible = not power_names.is_empty();
 
 
 ## 设置当前界面显示的敌人行动意图文字。
@@ -96,8 +117,12 @@ func set_intent(intent_text:String)->void:
 
 ## 节点进入场景树并且@onready节点引用准备完成后，设置界面的初始显示状态。
 ##
-## 初始状态下隐藏格挡和敌人意图标签。
+## 初始状态下隐藏格挡、状态和敌人意图标签。
 ## 该方法不会创建CombatantState，也不会擅自绑定玩家或敌人。
 func _ready()->void:
 	block_label.hide();#尚未绑定角色状态时，不显示默认格挡文字
+	strength_label.hide();
+	weak_label.hide();
+	vulnerable_label.hide();
+	power_label.hide();
 	intent_label.hide();#尚未设置敌人意图时，不显示默认意图文字

@@ -1,0 +1,164 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://run/draft/starting_draft_view.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://artworks/map_background.png" id="2_background"]
+
+[sub_resource type="StyleBoxFlat" id="Frame"]
+bg_color = Color(0.035, 0.055, 0.08, 0.93)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.3, 0.37, 0.44, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_left = 12
+corner_radius_bottom_right = 12
+content_margin_left = 20.0
+content_margin_right = 20.0
+content_margin_top = 16.0
+content_margin_bottom = 16.0
+
+[node name="starting_draft_view" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="background" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("2_background")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="shade" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.02, 0.03, 0.05, 0.7)
+
+[node name="margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="layout" type="VBoxContainer" parent="margin"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="header" type="PanelContainer" parent="margin/layout"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("Frame")
+
+[node name="title_label" type="Label" parent="margin/layout/header"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.84, 0.6, 1)
+theme_override_font_sizes/font_size = 26
+text = "选择1张传说卡牌，以组建你的初始牌组！"
+horizontal_alignment = 1
+
+[node name="body" type="HBoxContainer" parent="margin/layout"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 20
+
+[node name="showcase" type="PanelContainer" parent="margin/layout/body"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 3.0
+theme_override_styles/panel = SubResource("Frame")
+
+[node name="layout" type="VBoxContainer" parent="margin/layout/body/showcase"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="card_center" type="CenterContainer" parent="margin/layout/body/showcase/layout"]
+layout_mode = 2
+size_flags_vertical = 3
+custom_minimum_size = Vector2(468, 420)
+
+[node name="card_grid" type="GridContainer" parent="margin/layout/body/showcase/layout/card_center"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/h_separation = 24
+theme_override_constants/v_separation = 20
+columns = 3
+
+[node name="paging" type="HBoxContainer" parent="margin/layout/body/showcase/layout"]
+layout_mode = 2
+theme_override_constants/separation = 20
+alignment = 1
+
+[node name="previous_button" type="Button" parent="margin/layout/body/showcase/layout/paging"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(100, 36)
+text = "上一页"
+
+[node name="page_label" type="Label" parent="margin/layout/body/showcase/layout/paging"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(64, 0)
+text = "1 / 1"
+horizontal_alignment = 1
+
+[node name="next_button" type="Button" parent="margin/layout/body/showcase/layout/paging"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(100, 36)
+text = "下一页"
+
+[node name="sidebar" type="PanelContainer" parent="margin/layout/body"]
+layout_mode = 2
+custom_minimum_size = Vector2(260, 0)
+size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("Frame")
+
+[node name="layout" type="VBoxContainer" parent="margin/layout/body/sidebar"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="deck_title" type="Label" parent="margin/layout/body/sidebar/layout"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.84, 0.6, 1)
+theme_override_font_sizes/font_size = 22
+text = "当前牌组（6张）"
+
+[node name="deck_scroll" type="ScrollContainer" parent="margin/layout/body/sidebar/layout"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="deck_list" type="VBoxContainer" parent="margin/layout/body/sidebar/layout/deck_scroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="back_button" type="Button" parent="margin/layout/body/sidebar/layout"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(0, 36)
+text = "返回主菜单"

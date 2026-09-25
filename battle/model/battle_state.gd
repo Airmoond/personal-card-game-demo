@@ -1,6 +1,6 @@
 ## 保存一场战斗当前时刻的全部运行时状态。
 ##
-## 包含参战角色、能量、回合阶段以及抽牌堆、手牌和弃牌堆。
+## 包含参战角色、能量、回合阶段，以及卡牌在各牌堆和结算中的归属。
 ## BattleState是战斗数据的唯一可信来源；控制器负责调用这里的方法推进战斗，
 ## 显示层只读取这些状态并更新画面，不应把UI中的数值反向当作真实战斗数据。
 class_name BattleState
@@ -43,6 +43,31 @@ var hand:Array[CardInstance];
 ## 当前弃牌堆中的卡牌实例；抽牌堆耗尽时，这些卡牌会被重新洗入抽牌堆。
 var discard_pile:Array[CardInstance];
 
+## 正在执行效果的卡牌；不参与抽牌与洗牌，同时阻止其他出牌或结束回合操作。
+## 正常结算后归档并清空；执行失败时保留在这里，便于定位已部分生效的操作。
+var resolving_card:CardInstance;
+
+## 本场已消耗的卡牌，不会被洗回抽牌堆。
+var exhaust_pile:Array[CardInstance] = [];
+
+## 已打出的无消耗能力牌；退出循环但不算消耗。
+var played_power_cards:Array[CardInstance] = [];
+
+## 当前装备的原卡牌实例；它离开手牌，但仍参与本场卡牌数量统计。
+var equipped_weapon:CardInstance;
+
+## 每个玩家回合恢复一次；机会属于角色，换装和重装都不会刷新。
+var weapon_attack_available:bool = false;
+
+## 只限制抽牌，不影响装备损坏回手等直接移动卡牌的行为。
+var draw_blocked_this_turn:bool = false;
+
+## 本回合每打出一张攻击牌获得的能量；重复施加相加，玩家回合结束清零。
+var attack_card_energy_this_turn:int = 0;
+
+## 本场初始牌数，供状态检查核对移动过程中有没有丢牌。
+var _initial_card_count:int = 0;
+
 ## 当前战斗阶段，用于让控制器判断此刻允许执行哪些战斗操作。
 var current_phase:BattlePhase;
 
@@ -68,8 +93,8 @@ var max_hand_size:int;
 ## cards_each_turn必须大于0且不能超过hand_size_limit；hand_size_limit必须大于0。
 ## start_pile中存在null、非法CardInstance，或者重复放入同一个CardInstance时，
 ## 推送对应错误、保持当前BattleState原有数据不变，并返回false。
-## 所有参数合法时保存角色引用，将start_pile中的卡牌实例放入draw_pile，清空hand和
-## discard_pile，保存全部遭遇规则，把能量、回合编号和阶段恢复为战斗初始状态，
+## 所有参数合法时保存角色引用，将start_pile中的卡牌实例放入draw_pile，清空其他牌区，
+## 保存全部遭遇规则，把能量、回合编号和阶段恢复为战斗初始状态，
 ## 然后返回true。
 ## 该方法会复制start_pile数组本身，但不会复制数组中的CardInstance。
 func battle_state_init(
@@ -145,6 +170,14 @@ func battle_state_init(
 	draw_pile = start_pile.duplicate();
 	hand.clear();
 	discard_pile.clear();
+	resolving_card = null;
+	exhaust_pile.clear();
+	played_power_cards.clear();
+	equipped_weapon = null;
+	weapon_attack_available = false;
+	draw_blocked_this_turn = false;
+	attack_card_energy_this_turn = 0;
+	_initial_card_count = start_pile.size();
 	current_available_energy = 0;
 	current_turn_number = 0;
 	current_phase = BattlePhase.SETUP;
@@ -159,7 +192,7 @@ func battle_state_init(
 ## 角色状态为空，敌人定义或当前行动非法，能量或回合编号小于0，每回合抽牌数或
 ## 手牌上限不合法，或者手牌数量超过上限时，推送对应错误并返回true。
 ## 任意牌堆中存在null、非法CardInstance，或者同一个CardInstance在一个或多个牌堆中
-## 重复出现时，推送对应错误并返回true。
+## 重复出现，或者所有牌区（包括结算中）的总数不等于初始牌数时，返回true。
 ## 上述非法情况均不存在时返回false。
 ## 该方法只检查数据，不会修复或修改当前战斗状态。
 func is_invalid_battle()->bool:
@@ -209,42 +242,33 @@ func is_invalid_battle()->bool:
 		push_error("当前手牌数量超过手牌上限，战斗状态非法")
 		return true;
 	
-	for card in draw_pile:
-		if card == null:
-			push_error("抽牌堆中存在空卡牌，战斗状态非法")
-			return true;
-		if card.is_invalid_instance():
-			push_error("抽牌堆中存在非法卡牌实例，战斗状态非法")
-			return true;
-	
-	for card in hand:
-		if card == null:
-			push_error("手牌中存在空卡牌，战斗状态非法")
-			return true;
-		if card.is_invalid_instance():
-			push_error("手牌中存在非法卡牌实例，战斗状态非法")
-			return true;
-	
-	for card in discard_pile:
-		if card == null:
-			push_error("弃牌堆中存在空卡牌，战斗状态非法")
-			return true;
-		if card.is_invalid_instance():
-			push_error("弃牌堆中存在非法卡牌实例，战斗状态非法")
-			return true;
+	# 汇总所有真实卡牌区域，统一检查，避免为每个新牌堆复制一套验证。
+	var all_cards:Array[CardInstance] = [];
+	all_cards.append_array(draw_pile);
+	all_cards.append_array(hand);
+	all_cards.append_array(discard_pile);
+	all_cards.append_array(exhaust_pile);
+	all_cards.append_array(played_power_cards);
+	if resolving_card != null:
+		all_cards.append(resolving_card);
+	if equipped_weapon != null:
+		all_cards.append(equipped_weapon);
 
-	var all_pile_cards:Array[CardInstance];
-	all_pile_cards.append_array(draw_pile);
-	all_pile_cards.append_array(hand);
-	all_pile_cards.append_array(discard_pile);
-	var all_pile_instance_ids:Dictionary = {};
-	for card in all_pile_cards:
-		var card_instance_id:int = card.get_instance_id();
-		if all_pile_instance_ids.has(card_instance_id):
-			push_error("多个牌堆中重复存在同一个卡牌实例，战斗状态非法")
+	if all_cards.size() != _initial_card_count:
+		push_error("所有牌区的卡牌总数与初始牌数不一致");
+		return true;
+
+	var seen_card_ids:Dictionary = {};
+	for card in all_cards:
+		if card == null or card.is_invalid_instance():
+			push_error("牌区中存在空卡牌或非法实例");
 			return true;
-		all_pile_instance_ids[card_instance_id] = true;
-	
+		var instance_id:int = card.get_instance_id();
+		if seen_card_ids.has(instance_id):
+			push_error("同一卡牌实例重复出现在牌区中");
+			return true;
+		seen_card_ids[instance_id] = true;
+
 	return false;
 
 
@@ -255,6 +279,16 @@ func is_invalid_battle()->bool:
 ## 该方法只负责恢复能量，不负责开始玩家回合，也没有返回值。
 func reset_energy_for_turn()->void:
 	current_available_energy = energy_per_turn;
+
+
+## 增加当前能量，可以超过每回合基础值；数值由效果定义验证为正数。
+func gain_energy(amount:int)->void:
+	current_available_energy += amount;
+
+
+## 只增加后续攻击牌的回能额度，不立刻回复能量。
+func add_attack_card_energy(amount:int)->void:
+	attack_card_energy_this_turn += amount;
 
 
 ## 尝试消耗指定数量的当前可用能量。
@@ -285,15 +319,36 @@ func shuffle_draw_pile()->void:
 	draw_pile.shuffle();
 
 
+## 仅在首回合抽牌前调用：洗牌后把固有牌放到数组末尾（牌堆顶）。
+## 返回首回合尝试抽取的数量，实际手牌上限仍由draw_one_card统一处理。
+func prepare_opening_draw()->int:
+	shuffle_draw_pile();
+	var ordinary_cards:Array[CardInstance] = [];
+	var innate_cards:Array[CardInstance] = [];
+	for card in draw_pile:
+		if card.definition.is_innate:
+			innate_cards.append(card);
+		else:
+			ordinary_cards.append(card);
+	draw_pile = ordinary_cards;
+	draw_pile.append_array(innate_cards);
+	return maxi(cards_per_turn, innate_cards.size());
+
+
+## 限制持续到下一玩家回合开始，重复施加不叠加。
+func prevent_draw_for_turn()->void:
+	draw_blocked_this_turn = true;
+
+
 ## 尝试从抽牌堆顶端抽取一张卡牌并加入玩家手牌。
 ##
-## 手牌已满时不修改任何牌堆，并返回null。
+## 禁止抽牌或手牌已满时不修改任何牌堆，并返回null。
 ## draw_pile为空而discard_pile不为空时，先将弃牌堆移动到抽牌堆并进行洗牌。
 ## 完成上述处理后仍然没有可抽取的卡牌时返回null。
 ## 成功时从draw_pile末尾取出同一个CardInstance，将其加入hand并返回该实例。
 ## 该方法不会创建或复制CardInstance。
 func draw_one_card()->CardInstance:
-	if hand_is_full():
+	if draw_blocked_this_turn or hand_is_full():
 		return null;
 	if draw_pile.is_empty() and !discard_pile.is_empty():#如果抽牌堆空了，尝试洗牌
 		draw_pile = discard_pile.duplicate();
@@ -322,7 +377,7 @@ func hand_is_full()->bool:
 ## 尝试连续抽取指定数量的卡牌。
 ##
 ## draw_count小于或等于0时不修改任何牌堆，并返回空数组。
-## 每次抽牌都会调用draw_one_card；当手牌已满或所有牌堆均无牌可抽时提前停止。
+## 每次抽牌都会调用draw_one_card；禁止抽牌、手牌已满或无牌可抽时提前停止。
 ## 返回值包含本次实际成功抽到的全部CardInstance，数量可能小于draw_count。
 ## 如果一张牌也没有成功抽取，则返回空数组。
 func draw_multiple_cards(draw_count:int)->Array[CardInstance]:
@@ -354,14 +409,94 @@ func discard_card_from_hand(card:CardInstance)->bool:
 	return true;
 
 
-## 将玩家当前手牌中的所有卡牌实例移动到弃牌堆。
-##
-## 手牌为空时不执行任何操作。
-## 手牌不为空时，将其中的全部CardInstance加入discard_pile，然后清空hand。
-## 该方法移动的是原有卡牌实例，不会创建、复制或销毁卡牌，也没有返回值。
-func discard_hand()->void:
-	discard_pile.append_array(hand);
-	hand.clear();
+## 验证本次出牌的可用性，再一起完成扣费和从手牌移入结算中区域。
+## 手牌中的实例已在战斗初始化时验证，这里不重新扫描卡牌定义或其他牌堆。
+func begin_card_play(card:CardInstance)->bool:
+	if current_phase != BattlePhase.PLAYER_TURN or resolving_card != null:
+		return false;
+	if card == null or not hand.has(card):
+		return false;
+	if not spend_energy(card.current_energy_cost):
+		return false;
+
+	hand.erase(card);
+	resolving_card = card;
+	# 在本牌效果执行前读取已有额度，因此不会触发本牌新施加的回能。
+	if card.definition.card_type == CardDefinition.CardType.ATTACK and attack_card_energy_this_turn > 0:
+		gain_energy(attack_card_energy_this_turn);
+	if card.definition.card_type == CardDefinition.CardType.WEAPON:
+		_break_equipped_weapon();# 新牌已经离手，旧武器回手时有一个空位。
+	return true;
+
+
+## 仅在begin_card_play成功且全部效果执行完成后调用。
+## 武器进入装备位；其他牌消耗优先于能力类型。保留只影响未打出的手牌。
+func finish_card_play()->void:
+	var card:CardInstance = resolving_card;
+	if card.definition.card_type == CardDefinition.CardType.WEAPON:
+		card.weapon.restore_durability();
+		equipped_weapon = card;
+	elif card.definition.exhausts_on_play:
+		exhaust_pile.append(card);
+	elif card.definition.card_type == CardDefinition.CardType.POWER:
+		played_power_cards.append(card);
+	else:
+		discard_pile.append(card);
+	resolving_card = null;
+
+
+## 换装与攻击共用损坏去向；“永恒”满手时进入弃牌堆，之后正常抽回。
+func _break_equipped_weapon()->void:
+	if equipped_weapon == null:
+		return;
+	var old_weapon:CardInstance = equipped_weapon;
+	equipped_weapon = null;
+	old_weapon.weapon.current_durability = 0;
+	if old_weapon.weapon.definition.break_destination == WeaponDefinition.BreakDestination.RETURN_TO_HAND:
+		if hand_is_full():
+			discard_pile.append(old_weapon);
+		else:
+			hand.append(old_weapon);
+	else:
+		exhaust_pile.append(old_weapon);
+
+
+## 界面显示和实际攻击共用此判断，攻击不检查能量或手牌容量。
+func can_attack_with_weapon()->bool:
+	return (
+		current_phase == BattlePhase.PLAYER_TURN
+		and resolving_card == null
+		and equipped_weapon != null
+		and weapon_attack_available
+		and player_state.is_alive()
+		and enemy_state.is_alive()
+	);
+
+
+## 独立于出牌的同步攻击。先消耗机会并造成伤害，再触发力量和抽牌，最后扣耐久并处理损坏。
+## 即使伤害为0或完全被格挡，也消耗这次机会和1点耐久。
+func attack_with_weapon()->bool:
+	if not can_attack_with_weapon():
+		return false;
+	weapon_attack_available = false;
+	var weapon:WeaponInstance = equipped_weapon.weapon;
+	AttackDamageResolver.apply(player_state, enemy_state, weapon.current_attack, weapon.definition.ignores_block);
+	if weapon.definition.strength_on_attack > 0:
+		player_state.gain_strength(weapon.definition.strength_on_attack);
+	if weapon.definition.draw_on_attack > 0:
+		draw_multiple_cards(weapon.definition.draw_on_attack);
+	weapon.current_durability -= 1;
+	if weapon.current_durability == 0:
+		_break_equipped_weapon();
+	return true;
+
+
+## 回合结束时只弃置没有保留词条的手牌；未打出的消耗牌不会自动消耗。
+func discard_hand_at_turn_end()->void:
+	# 遍历快照，因为discard_card_from_hand会修改原手牌数组。
+	for card in hand.duplicate():
+		if not card.definition.retains_on_turn_end:
+			discard_card_from_hand(card);
 
 
 ## 判断玩家是否已经取得当前战斗的胜利。

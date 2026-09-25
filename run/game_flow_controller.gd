@@ -12,6 +12,9 @@ extends Node
 ## 主菜单页面场景。
 @export var main_menu_scene:PackedScene
 
+## 逐轮开局构筑页面，布局可直接在Godot场景中调整。
+@export var starting_draft_scene:PackedScene
+
 
 ## 地图页面场景。
 @export var map_scene:PackedScene
@@ -90,7 +93,32 @@ func _start_new_run()->void:
 
 	run_state = new_run_state # 初始化完整后再提交为当前冒险的唯一状态。
 	_remaining_reward_selections = 0 # 新冒险不能继承上一局尚未完成的奖励次数。
-	_show_map() # 后续所有页面都共享刚刚提交的这一份RunState。
+	_show_starting_draft()
+
+
+## 本轮完整候选按角色卡池顺序筛选，分页只由页面负责。
+func _show_starting_draft()->void:
+	var candidates:Array[CardDefinition] = CardPoolSampler.filter_pool(
+		run_definition.character_definition.reward_card_pool, [run_state.get_draft_rarity()]
+	);
+	var page:StartingDraftView = _replace_page(starting_draft_scene) as StartingDraftView;
+	page.setup(run_state.get_draft_rarity(), candidates, run_state.owned_cards);
+	page.card_selected.connect(_handle_starting_card_selected);
+	page.back_requested.connect(_show_main_menu);
+
+
+## 只接受当前轮候选；先提交牌组，再创建下一轮页面或地图。
+func _handle_starting_card_selected(card:CardDefinition)->void:
+	if not current_page is StartingDraftView:
+		return;
+	if not current_page.candidates.has(card):
+		return;
+	if not run_state.choose_starting_card(card):
+		return;
+	if run_state.status == RunState.RunStatus.DRAFTING:
+		_show_starting_draft();
+	else:
+		_show_map();
 
 
 ## 创建地图页面，并用当前冒险的地图定义与运行时进度设置页面。
@@ -100,6 +128,8 @@ func _show_map()->void:
 	if run_state == null: # 主菜单阶段没有RunState，不能直接进入地图。
 		push_error("GameFlowController：尚未创建局内状态，无法显示地图。")
 		return
+	if run_state.status != RunState.RunStatus.IN_PROGRESS:
+		return # 构筑完成前不开放地图。
 
 	var map_view:MapView = _replace_page(map_scene) as MapView # 旧页面会由统一入口负责释放。
 	if map_view == null:
@@ -154,24 +184,27 @@ func _start_battle_for_node(node:MapNodeDefinition)->void:
 	battle_controller.battle_finished.connect(_handle_battle_finished) # 战斗只报告结果，流程层决定去向。
 	if not battle_controller.start_battle(
 		node.encounter_definition, # 当前地图节点决定本场敌人与战斗规则。
-		run_definition.player_definition, # 玩家身份与最大生命来自整局静态定义。
+		run_definition.character_definition.combatant_definition, # 玩家身份来自角色静态定义。
 		run_state.owned_cards, # 每个元素会在战斗中重新创建一张CardInstance。
-		run_state.current_health # 使用上一节点结束后保留下来的跨战斗生命。
+		run_state.current_health, # 使用上一节点结束后保留下来的跨战斗生命。
+		run_state.max_health # 最大生命的整局变化同样延续到下一场。
 	):
 		push_error("GameFlowController：战斗启动失败。")
 
 
 ## 接收单场战斗结果。
 ##
-## 首先把战斗剩余生命回写到 [RunState]。失败时标记整局失败并显示结算；
+## 首先把战斗剩余生命与最大生命回写到 [RunState]。失败时标记整局失败并显示结算；
 ## 普通战斗胜利时进入奖励页面；Boss胜利时完成节点、标记整局胜利并显示结算。
 ##
 ## 普通战斗节点会保留为当前节点，直到玩家完成全部奖励选择后才正式完成。
 func _handle_battle_finished(
 	victory:bool,
-	remaining_player_health:int
+	remaining_player_health:int,
+	remaining_player_max_health:int
 )->void:
 	run_state.current_health = remaining_player_health # 单场战斗结果写回跨战斗生命。
+	run_state.max_health = remaining_player_max_health # 在奖励、休整或结算前同步本局上限。
 
 	if not victory: # 战败不会完成当前节点，便于终局状态保留失败位置。
 		if not run_state.mark_defeat(): # 先提交DEFEAT，再进入只负责显示的结算页面。
@@ -199,15 +232,18 @@ func _handle_battle_finished(
 	_show_reward() # 每轮选择后会根据剩余次数决定继续奖励或返回地图。
 
 
-## 从静态奖励池中无放回抽取本轮候选，并显示卡牌奖励页面。
+## 从静态奖励池中排除传说卡，无放回抽取本轮候选，再显示奖励页面。
 ##
 ## 只复制和打乱数组结构，数组中的 [CardDefinition] 仍是只读资源引用；
-## 不会改变 [member RunDefinition.reward_pool] 的原始顺序或内容。
+## 不会改变 [member CharacterDefinition.reward_card_pool] 的原始顺序或内容。
 func _show_reward()->void:
-	var reward_options:Array[CardDefinition] = []
-	reward_options.assign(run_definition.reward_pool) # 创建独立数组，保护静态奖励池。
-	reward_options.shuffle() # 只改变局部数组中资源引用的排列顺序。
-	reward_options.resize(run_definition.reward_option_count) # 截取本次需要展示的不同候选。
+	var reward_options:Array[CardDefinition] = CardPoolSampler.sample(
+		run_definition.character_definition.reward_card_pool,
+		run_definition.reward_option_count,
+		CardPoolSampler.REWARD_RARITIES
+	)
+	if reward_options.is_empty():
+		return # 抽样器已报告数量不足，保留当前页面，不展示空奖励页。
 
 	var reward_view:RewardView = _replace_page(reward_scene) as RewardView # 用奖励页替换已经结束的战斗页。
 	if reward_view == null:
@@ -276,6 +312,9 @@ func _validate_configuration()->bool:
 	if main_menu_scene == null:
 		push_error("GameFlowController：未配置 main_menu_scene。")
 		return false
+	if starting_draft_scene == null:
+		push_error("GameFlowController：未配置 starting_draft_scene。");
+		return false;
 
 	if map_scene == null:
 		push_error("GameFlowController：未配置 map_scene。")

@@ -13,14 +13,18 @@ class_name BattleController
 ## CardView的场景模板；每张手牌都会由它实例化出一个独立界面。
 const CARD_VIEW_SCENE:PackedScene = preload("res://cards/card_view.tscn");
 
+## 外观位于手牌区的操作入口，不创建CardDefinition或CardInstance。
+const WEAPON_ATTACK_VIEW_SCENE:PackedScene = preload("res://battle/weapons/weapon_attack_view.tscn");
+
 ## 当前单场战斗首次产生最终结果时发出。
 ##
 ## victory表示玩家是否击败敌人；remaining_player_health是战斗结束时玩家的
-## 实际剩余生命。该信号只报告单场战斗结果，不修改RunState、不完成地图节点，
+## 实际剩余生命，remaining_player_max_health是本局实际上限。信号不修改RunState、不完成地图节点，
 ## 也不决定下一页显示地图、奖励还是整局结算。
 signal battle_finished(
 	victory:bool,
-	remaining_player_health:int
+	remaining_player_health:int,
+	remaining_player_max_health:int
 )
 
 ## 当前战斗的唯一数据源。
@@ -52,6 +56,10 @@ var _battle_result_reported:bool = false
 @onready var energy_label:Label = $"../main_layout/battle_info_area/energy_label";
 @onready var draw_pile_label:Label = $"../main_layout/battle_info_area/draw_pile_label";
 @onready var discard_pile_label:Label = $"../main_layout/battle_info_area/discard_pile_label";
+@onready var exhaust_pile_label:Label = $"../main_layout/battle_info_area/exhaust_pile_label";
+
+## 武器装备信息，直接读取装备中的卡牌实例及其武器状态。
+@onready var weapon_label:Label = $"../main_layout/player_area/weapon_label";
 
 ## 底部手牌区域。
 @onready var hand_area:HBoxContainer = $"../main_layout/hand_area";
@@ -126,6 +134,7 @@ func _create_deck_from_definitions(
 ## encounter只提供敌人与单场战斗规则；player_definition提供玩家静态属性；
 ## deck_definitions中的每个元素都代表玩家在当前整局中实际拥有的一张卡；
 ## starting_player_health是上一场战斗或休整结算后保存的跨战斗生命。
+## starting_player_max_health是本局实际上限，可能已因血祭低于角色初始上限。
 ##
 ## 方法会验证全部输入，在局部变量中创建全新的CombatantState、EnemyState、
 ## CardInstance牌组和BattleState。全部初始化成功后才替换battle_state，
@@ -139,7 +148,8 @@ func start_battle(
 	encounter:EncounterDefinition,
 	player_definition:CombatantDefinition,
 	deck_definitions:Array[CardDefinition],
-	starting_player_health:int
+	starting_player_health:int,
+	starting_player_max_health:int
 )->bool:
 	if not is_node_ready():#@onready界面引用准备好之前不能绑定角色或刷新战斗画面
 		push_error("BattleController尚未准备完成，无法开始战斗");#报告外部流程调用时机错误
@@ -159,7 +169,7 @@ func start_battle(
 	if starting_player_health <= 0:#0生命表示整局已失败，不能进入下一场战斗
 		push_error("战斗起始生命必须大于0");#报告流程层尝试使用死亡玩家启动战斗
 		return false;#非正数生命不能写入新CombatantState
-	if starting_player_health > player_definition.max_health:#跨战斗生命不能突破玩家静态上限
+	if starting_player_max_health <= 0 or starting_player_health > starting_player_max_health:
 		push_error("战斗起始生命不能超过玩家最大生命");#报告RunState回写或治疗计算可能已损坏
 		return false;#不通过静默截断掩盖外部状态错误
 
@@ -167,6 +177,7 @@ func start_battle(
 	if not new_player_state.combatant_init_from_definition(player_definition):#先从外部玩家定义建立最大生命和显示数据
 		push_error("玩家状态初始化失败，无法开始战斗");#报告运行时玩家创建失败
 		return false;#不使用未完整初始化的CombatantState
+	new_player_state.max_health = starting_player_max_health;# 使用本局实际上限，不修改角色静态定义。
 	if not new_player_state.set_current_health(starting_player_health):#再把RunState保存的剩余生命写入新玩家状态
 		push_error("玩家剩余生命设置失败，无法开始战斗");#补充跨战斗生命注入阶段的上下文
 		return false;#生命设置失败时不继续构建敌人或牌组
@@ -195,8 +206,6 @@ func start_battle(
 		push_error("战斗状态初始化失败，无法开始战斗");#报告运行时组装未通过BattleState验证
 		return false;#局部半成品不会覆盖控制器当前的battle_state
 
-	new_battle_state.shuffle_draw_pile();#初始牌组全部位于抽牌堆，正式提交前先随机打乱顺序
-
 	if not player_view.bind_combatant_state(new_battle_state.player_state):#使玩家View读取本场新建的玩家状态
 		push_error("玩家界面绑定失败，无法开始战斗");#报告战斗场景与运行时状态的契约不一致
 		return false;#不提交无法完整显示玩家的新战斗
@@ -214,8 +223,8 @@ func start_battle(
 
 ## 根据敌人当前行动的名称和真实效果生成纯显示用的意图文字。
 ##
-## 伤害、格挡数值和重复次数只从action.effects读取，不从intent_text反推规则。
-## 单效果与多效果行动都按照效果数组顺序显示；敌人不支持的DRAW效果会使生成失败。
+## 基础数值和次数读取action.effects，攻击预览再计入双方状态，不从intent_text反推规则。
+## 按效果顺序预览，包括本次行动先施加状态再攻击；仅修改局部预览数值。
 ## action为空或非法时推送错误并返回空字符串，让View清除旧意图。
 ## 该方法只生成文字，不执行效果，也不修改EnemyActionDefinition资源。
 func _build_enemy_intent_text(action:EnemyActionDefinition)->String:
@@ -224,15 +233,35 @@ func _build_enemy_intent_text(action:EnemyActionDefinition)->String:
 		return "";#空字符串会让CombatantView隐藏旧意图
 
 	var effect_descriptions:PackedStringArray = [];#按照行动效果顺序收集每一项显示说明
-	for effect in action.effects:#显示与执行遍历同一份效果数组，避免产生两套数值来源
+	var block_at_action_start:int = 0;
+	if battle_state.enemy_state.has_power(PowerDefinition.PowerType.RETAIN_BLOCK):
+		block_at_action_start = battle_state.enemy_state.current_block;
+	for power in battle_state.enemy_state.powers:
+		if power.power_type == PowerDefinition.PowerType.TURN_START_HEALTH_FOR_BLOCK:
+			block_at_action_start += power.block_gain;
+	var damage_values:Array[int] = AttackDamageResolver.preview_effect_damage(
+		action.effects, battle_state.enemy_state, battle_state.player_state, block_at_action_start
+	);
+	for effect_index in range(action.effects.size()):
+		var effect:CombatEffectDefinition = action.effects[effect_index];
 		var effect_description:String = "";#保存当前效果生成的局部说明
 		match effect.effect_type:#根据效果类型选择玩家容易理解的显示名称
 			CombatEffectDefinition.EffectType.DAMAGE:
-				effect_description = "%d点伤害" % effect.amount;#伤害数值直接来自真实效果
+				effect_description = "%d点伤害" % damage_values[effect_index];
+				if effect.heals_from_damage:
+					effect_description += "，按目标失血回血";
+			CombatEffectDefinition.EffectType.GAIN_STRENGTH:
+				effect_description = ("自身力量 +%d" if effect.target_type == CombatEffectDefinition.TargetType.SELF else "对手力量 +%d") % effect.amount;
 			CombatEffectDefinition.EffectType.BLOCK:
 				effect_description = "%d点格挡" % effect.amount;#格挡数值直接来自真实效果
-			CombatEffectDefinition.EffectType.DRAW:
-				push_error("敌人行动不能生成抽牌意图");#第二阶段敌人没有自己的牌堆
+			CombatEffectDefinition.EffectType.APPLY_WEAK:
+				effect_description = ("自身虚弱 %d 回合" if effect.target_type == CombatEffectDefinition.TargetType.SELF else "对手虚弱 %d 回合") % effect.amount;
+			CombatEffectDefinition.EffectType.APPLY_VULNERABLE:
+				effect_description = ("自身易伤 %d 回合" if effect.target_type == CombatEffectDefinition.TargetType.SELF else "对手易伤 %d 回合") % effect.amount;
+			CombatEffectDefinition.EffectType.APPLY_POWER:
+				effect_description = ("自身获得%s" if effect.target_type == CombatEffectDefinition.TargetType.SELF else "对手获得%s") % effect.power_definition.display_name;
+			CombatEffectDefinition.EffectType.DRAW, CombatEffectDefinition.EffectType.GAIN_ENERGY, CombatEffectDefinition.EffectType.ENHANCE_WEAPON, CombatEffectDefinition.EffectType.LOSE_HEALTH, CombatEffectDefinition.EffectType.PREVENT_DRAW, CombatEffectDefinition.EffectType.LOSE_MAX_HEALTH, CombatEffectDefinition.EffectType.GAIN_ATTACK_CARD_ENERGY:
+				push_error("敌人行动不能使用玩家专用效果");
 				return "";#拒绝显示无法正确执行的敌人效果
 			_:
 				push_error("敌人行动包含不支持的效果类型");#防止未知枚举被静默显示
@@ -265,21 +294,44 @@ func _refresh_battle_view()->void:
 		battle_state.current_available_energy,
 		battle_state.energy_per_turn
 	];#%d会按数组顺序填入“当前能量 / 每回合能量”
+	energy_label.tooltip_text = "";
+	if battle_state.attack_card_energy_this_turn > 0:
+		energy_label.tooltip_text = "本回合每打出一张攻击牌回复%d能量。\n先支付费用，再回能并执行卡牌效果；武器攻击不触发。" % battle_state.attack_card_energy_this_turn;
 	draw_pile_label.text = "抽牌堆：%d" % battle_state.draw_pile.size();#size()返回数组中的卡牌数量
+	if battle_state.draw_blocked_this_turn:
+		draw_pile_label.text += "（禁抽）";
+	draw_pile_label.tooltip_text = "本回合不能抽牌，下个玩家回合开始时解除。" if battle_state.draw_blocked_this_turn else "";
 	discard_pile_label.text = "弃牌堆：%d" % battle_state.discard_pile.size();
+	exhaust_pile_label.text = "消耗牌：%d" % battle_state.exhaust_pile.size();
+	var equipped:CardInstance = battle_state.equipped_weapon;
+	weapon_label.text = "武器：未装备";
+	if equipped != null:
+		weapon_label.text = "武器：%s\n攻击：%d  耐久：%d / %d" % [
+			equipped.definition.card_name,
+			equipped.weapon.current_attack,
+			equipped.weapon.current_durability,
+			equipped.weapon.max_durability
+		];
+	end_turn_button.disabled = (
+		battle_state.current_phase != BattleState.BattlePhase.PLAYER_TURN
+		or battle_state.resolving_card != null
+	);
 	_rebuild_hand();#以BattleState.hand为标准，让屏幕上的手牌与数据完全一致
 	
 	
 ## 判断一张卡牌在当前战斗时刻是否应当显示为可以使用。
 ##
 ## 只有战斗状态存在、处于玩家回合、胜负尚未产生、卡牌实例合法且仍在手牌中，
-## 并且玩家当前能量足以支付费用时才返回true。其他情况均返回false。
+## 能量足够且满足武器强化的装备要求时才返回true。其他情况均返回false。
 ## 该方法只读取状态并返回显示判断，不消耗能量、不移动卡牌，也不执行任何效果。
 ## _on_card_selected仍会独立进行最终合法性检查，不能用本方法替代真实出牌验证。
 func _card_is_playable(card:CardInstance)->bool:
 	if battle_state == null:#没有战斗状态时无法确认回合、手牌归属或当前能量
 		return false;#缺少判断依据时统一显示为不可使用
-	if battle_state.current_phase != BattleState.BattlePhase.PLAYER_TURN:#只有玩家回合允许使用手牌
+	if (
+		battle_state.current_phase != BattleState.BattlePhase.PLAYER_TURN
+		or battle_state.resolving_card != null
+	):#只有玩家回合允许使用手牌
 		return false;#设置阶段反馈，但不在View中阻止点击
 	if battle_state.is_victory() or battle_state.is_defeat():#战斗结果产生后所有普通出牌都应停止
 		return false;#结算状态下手牌统一显示为不可使用
@@ -288,7 +340,18 @@ func _card_is_playable(card:CardInstance)->bool:
 	if not battle_state.hand.has(card):#只有当前真实手牌中的实例才可能被玩家使用
 		return false;#其他牌堆中的卡牌不能显示为可用手牌
 
-	return card.can_afford(battle_state.current_available_energy);#最后根据当前费用与真实可用能量决定外观
+	return card.can_afford(battle_state.current_available_energy) and _meets_effect_requirements(card);
+
+
+## 显示可用性和点击处理共用：强化需要武器，减少最大生命后至少保留1点。
+func _meets_effect_requirements(card:CardInstance)->bool:
+	var max_health_cost:int = 0;
+	for effect in card.definition.effects:
+		if effect.effect_type == CombatEffectDefinition.EffectType.ENHANCE_WEAPON and battle_state.equipped_weapon == null:
+			return false;
+		if effect.effect_type == CombatEffectDefinition.EffectType.LOSE_MAX_HEALTH:
+			max_health_cost += effect.amount * effect.repeat_count;
+	return battle_state.player_state.max_health > max_health_cost;
 
 
 ## 删除旧的CardView，并以BattleState.hand为标准重新创建全部手牌界面。
@@ -319,11 +382,36 @@ func _rebuild_hand()->void:
 			new_card_view.queue_free();
 			continue;#只跳过当前无效卡牌，继续尝试显示后面的手牌
 		
+		var damage_values:Array[int] = AttackDamageResolver.preview_effect_damage(
+			card_in_hand.definition.effects, battle_state.player_state, battle_state.enemy_state,
+			battle_state.player_state.current_block
+		);
+		new_card_view.set_description(card_in_hand.definition.format_description(damage_values));
 		new_card_view.set_playable_visual(
 			_card_is_playable(card_in_hand)
 		);#控制器计算回合、胜负、手牌归属和能量，CardView只显示结果
 		
 		new_card_view.card_selected.connect(_on_card_selected);#以后点击任意手牌都会回到控制器处理
+
+	# 临时操作入口不属于hand，也不占手牌上限；使用后随界面重建移除。
+	if battle_state.can_attack_with_weapon():
+		var attack_view:Button = WEAPON_ATTACK_VIEW_SCENE.instantiate();
+		# 文案由场景配置；这里不覆盖设计者在编辑器里填写的文字。
+		var damage:int = AttackDamageResolver.calculate(
+			battle_state.equipped_weapon.weapon.current_attack, battle_state.player_state.strength,
+			battle_state.player_state.weak_turns > 0, battle_state.enemy_state.vulnerable_turns > 0
+		);
+		var block_note:String = "无视格挡" if battle_state.equipped_weapon.weapon.definition.ignores_block else "格挡前";
+		attack_view.tooltip_text = "预计伤害：%d（%s）" % [damage, block_note];
+		var weapon_definition:WeaponDefinition = battle_state.equipped_weapon.weapon.definition;
+		if weapon_definition.strength_on_attack > 0:
+			attack_view.tooltip_text += "\n攻击后：获得%d点力量" % weapon_definition.strength_on_attack;
+		if weapon_definition.draw_on_attack > 0:
+			attack_view.tooltip_text += "\n攻击后：抽%d张牌" % weapon_definition.draw_on_attack;
+			if battle_state.draw_blocked_this_turn:
+				attack_view.tooltip_text += "（本回合禁止抽牌）";
+		attack_view.pressed.connect(_on_weapon_attack_requested);
+		hand_area.add_child(attack_view);
 
 
 ## 将一张卡牌的效果数组交给通用效果入队流程。
@@ -337,6 +425,8 @@ func _queue_card_effect(card:CardInstance)->bool:
 	if card == null or card.is_invalid_instance():#空卡牌或非法实例不能进入效果解释流程
 		push_error("需要安排效果的卡牌实例无效");#报告传入卡牌错误
 		return false;#拒绝安排任何行为
+	if card.definition.card_type == CardDefinition.CardType.WEAPON and card.definition.effects.is_empty():
+		return true;# 武器可以只有装备行为，不必伪造一项附加效果。
 
 	return _queue_effect_list(
 		card.definition.effects,
@@ -399,8 +489,7 @@ func _queue_effect_list(
 ## 将一项已经验证的战斗效果转换为一个或多个ActionQueue行为。
 ##
 ## SELF选择actor_state，OPPONENT选择opponent_state；repeat_count决定加入多少次
-## 独立行为。DAMAGE、BLOCK和DRAW分别转换为伤害、格挡和玩家抽牌。
-## 第二阶段不允许敌人抽牌，因此DRAW的行动者必须是当前玩家。
+## 独立行为。抽牌、获得能量与武器强化只支持玩家，强化目标取当前装备的武器实例。
 ## 该方法不负责清空队列；失败后的整体回滚由_queue_effect_list统一处理。
 func _queue_single_effect(
 	effect:CombatEffectDefinition,
@@ -424,19 +513,41 @@ func _queue_single_effect(
 	if effect.target_type == CombatEffectDefinition.TargetType.OPPONENT:#OPPONENT要求切换到行动者的对手
 		effect_target = opponent_state;#保存本项效果的实际角色目标
 
-	if effect.effect_type == CombatEffectDefinition.EffectType.DRAW and actor_state != battle_state.player_state:#当前牌堆系统只属于玩家
-		push_error("第二阶段不允许敌人执行抽牌效果");#防止敌人DRAW错误地操作玩家牌堆
-		return false;#拒绝无法正确表达的敌人抽牌
+	if effect.effect_type in [CombatEffectDefinition.EffectType.DRAW, CombatEffectDefinition.EffectType.GAIN_ENERGY, CombatEffectDefinition.EffectType.ENHANCE_WEAPON, CombatEffectDefinition.EffectType.LOSE_HEALTH, CombatEffectDefinition.EffectType.PREVENT_DRAW, CombatEffectDefinition.EffectType.LOSE_MAX_HEALTH, CombatEffectDefinition.EffectType.GAIN_ATTACK_CARD_ENERGY] and actor_state != battle_state.player_state:
+		push_error("此效果仅支持玩家使用");
+		return false;
 
 	for _repeat_index in range(effect.repeat_count):#每次循环都加入一次独立行为，保留多段效果语义
 		var queued_successfully:bool = false;#记录当前这一段效果是否成功进入队列
 		match effect.effect_type:#把静态效果类型翻译为ActionQueue支持的基础行为
 			CombatEffectDefinition.EffectType.DAMAGE:#伤害效果作用于选择出的角色目标
-				queued_successfully = action_queue.queue_damage(effect_target,effect.amount);#加入一段独立伤害
+				queued_successfully = action_queue.queue_damage_effect(actor_state,effect_target,effect);
+			CombatEffectDefinition.EffectType.GAIN_STRENGTH:
+				queued_successfully = action_queue.queue_gain_strength(effect_target,effect.amount);
+			CombatEffectDefinition.EffectType.APPLY_WEAK:
+				queued_successfully = action_queue.queue_weak(effect_target,effect.amount,actor_state == battle_state.enemy_state);
+			CombatEffectDefinition.EffectType.APPLY_VULNERABLE:
+				queued_successfully = action_queue.queue_vulnerable(effect_target,effect.amount,actor_state == battle_state.enemy_state);
+			CombatEffectDefinition.EffectType.APPLY_POWER:
+				queued_successfully = action_queue.queue_power(effect_target,effect.power_definition);
 			CombatEffectDefinition.EffectType.BLOCK:#格挡效果作用于选择出的角色目标
 				queued_successfully = action_queue.queue_block(effect_target,effect.amount);#加入一次独立格挡
 			CombatEffectDefinition.EffectType.DRAW:#抽牌效果操作当前玩家的BattleState牌堆
 				queued_successfully = action_queue.queue_draw(battle_state,effect.amount);#加入一次玩家抽牌行为
+			CombatEffectDefinition.EffectType.GAIN_ENERGY:
+				queued_successfully = action_queue.queue_gain_energy(battle_state,effect.amount);
+			CombatEffectDefinition.EffectType.GAIN_ATTACK_CARD_ENERGY:
+				queued_successfully = action_queue.queue_attack_card_energy(battle_state,effect.amount);
+			CombatEffectDefinition.EffectType.PREVENT_DRAW:
+				queued_successfully = action_queue.queue_prevent_draw(battle_state);
+			CombatEffectDefinition.EffectType.LOSE_MAX_HEALTH:
+				queued_successfully = action_queue.queue_lose_max_health(effect_target,effect.amount);
+			CombatEffectDefinition.EffectType.LOSE_HEALTH:
+				queued_successfully = action_queue.queue_lose_health(effect_target,effect.amount);
+			CombatEffectDefinition.EffectType.ENHANCE_WEAPON:
+				queued_successfully = action_queue.queue_enhance_weapon(
+					battle_state.equipped_weapon.weapon, effect.amount, effect.durability_bonus
+				);
 			_:#即使资源绕过前置验证，也不能静默忽略未知类型
 				push_error("遇到不支持的战斗效果类型，无法安排单项效果");#报告无法解释的枚举值
 
@@ -480,12 +591,13 @@ func _finish_battle(victory:bool)->void:
 	_battle_result_reported = true;#先提交一次性标记，防止信号回调或后续检查再次进入结算
 	battle_finished.emit(
 		victory,
-		remaining_player_health
+		remaining_player_health,
+		battle_state.player_state.max_health
 	);#作为最后一步报告结果，由GameFlowController决定奖励、地图或整局结算
 
 ## 检查当前战斗是否已经产生胜负结果。
 ##
-## 敌人死亡时使用true提交胜利，玩家死亡时使用false提交失败。
+## 玩家死亡时先提交失败，否则敌人死亡时提交胜利。
 ## 检测到新结果，或当前战斗已经报告过结果时返回true，让调用者立即
 ## 停止出牌、抽牌或敌人行动等后续流程；双方都存活且尚未结算时返回false。
 func _check_battle_result()->bool:
@@ -495,27 +607,30 @@ func _check_battle_result()->bool:
 	if _battle_result_reported:#同一场战斗的结果已经发送给外部流程
 		return true;#继续告诉所有调用者立即停止普通战斗流程
 
-	if battle_state.is_victory():#敌人已经失去全部生命
-		_finish_battle(true);#使用结构化布尔值提交单场胜利
-		return true;#阻止当前调用点再刷新普通回合或执行其他行为
-
-	if battle_state.is_defeat():#玩家已经失去全部生命
+	if battle_state.is_defeat():# 即使先前效果已击杀敌人，玩家失血致死仍按失败处理。
 		_finish_battle(false);#使用结构化布尔值提交单场失败
 		return true;#阻止敌人行动推进或新玩家回合继续开始
+
+	if battle_state.is_victory():
+		_finish_battle(true);
+		return true;
 
 	return false;#双方都存活，当前战斗应继续运行
 
 ## 接收CardView报告的玩家选择，并尝试打出这张卡牌。
 ##
 ## 只有玩家回合中、卡牌仍在手牌里且能量充足时才能打出。
-## 成功后扣除能量、将卡牌移入弃牌堆、执行效果并刷新界面。
+## 成功后扣费并移入结算中区域，执行效果，再归档卡牌、检查胜负并刷新界面。
 func _on_card_selected(selected_card:CardInstance)->void:
 	if battle_state == null:
 		push_error("尚未创建战斗状态，无法打出卡牌");
 		return;
 	
-	if battle_state.current_phase != BattleState.BattlePhase.PLAYER_TURN:
-		return;#不是玩家回合时忽略卡牌点击
+	if (
+		battle_state.current_phase != BattleState.BattlePhase.PLAYER_TURN
+		or battle_state.resolving_card != null
+	):
+		return;#非玩家可操作时刻或已有卡牌结算时忽略点击
 	
 	if battle_state.is_victory() or battle_state.is_defeat():
 		return;#战斗结果已经产生时不再处理卡牌点击
@@ -531,39 +646,48 @@ func _on_card_selected(selected_card:CardInstance)->void:
 	if not selected_card.can_afford(battle_state.current_available_energy):
 		print("能量不足，无法打出：%s" % selected_card.definition.card_name);
 		return;
+	if not _meets_effect_requirements(selected_card):
+		return;# 效果所需条件不满足时，在扣费和准备效果前结束。
 	
 	action_queue.clear_actions();#确保本次结算从空队列开始
 	
 	if not _queue_card_effect(selected_card):
 		return;
 	
-	if not battle_state.spend_energy(selected_card.current_energy_cost):
+	if not battle_state.begin_card_play(selected_card):
 		action_queue.clear_actions();
-		push_error("卡牌费用消耗失败");
-		return;
-	
-	if not battle_state.discard_card_from_hand(selected_card):
-		action_queue.clear_actions();
-		push_error("卡牌无法从手牌移动到弃牌堆");
 		return;
 	
 	var resolved_successfully:bool = action_queue.resolve_all();
 
 	if not resolved_successfully:
+		action_queue.clear_actions();
 		push_error("卡牌行为没有完整执行");
+		# 可能已有部分效果生效，不退费或退牌；保留resolving_card并锁住后续操作。
 		_refresh_battle_view();
 		return;
 
+	battle_state.finish_card_play();# 致命攻击也先归档，再发出可能切换页面的战斗结果。
 	if _check_battle_result():#攻击可能在这里让敌人生命归零
 		return;
 
 	_refresh_battle_view();
 
 
+## 武器操作不经过出牌入口；致命攻击也先完成耐久和损坏归档，再报告胜负。
+func _on_weapon_attack_requested()->void:
+	if not battle_state.attack_with_weapon():
+		return;
+	if _check_battle_result():
+		return;
+	_refresh_battle_view();
+
+
 ## 开始一个新的玩家回合。
 ##
-## 先确认战斗尚未结束，再清除玩家上回合剩余格挡、恢复能量、
-## 增加回合编号并同步执行抽牌。全部成功后切换至PLAYER_TURN并刷新界面。
+## 先确认战斗尚未结束，再按能力决定是否清除剩余格挡、恢复能量、
+## 增加回合编号，依次执行回合开始能力与抽牌。存活时切换至PLAYER_TURN并刷新界面。
+## 首回合洗牌并优先安排固有牌，后续回合仍使用基础抽牌数。
 func _start_player_turn()->void:
 	if battle_state == null:
 		push_error("尚未创建战斗状态，无法开始玩家回合");
@@ -572,18 +696,26 @@ func _start_player_turn()->void:
 	if _check_battle_result():
 		return;
 	
-	battle_state.player_state.clear_block();#玩家上回合剩余的格挡在新回合开始时清除
+	battle_state.player_state.clear_block_at_turn_start();#保留格挡能力跳过自动清理。
 	battle_state.reset_energy_for_turn();#把当前能量恢复为每回合基础能量
+	battle_state.draw_blocked_this_turn = false;# 先解禁，再执行本回合抽牌。
+	battle_state.weapon_attack_available = true;# 即使尚未装备，本回合首次装备后也能攻击。
 	battle_state.current_turn_number += 1;#进入下一个回合
 	
 	action_queue.clear_actions();
+	action_queue.queue_turn_start_powers(battle_state.player_state);
 	
-	if not action_queue.queue_draw(battle_state,battle_state.cards_per_turn):#每回合抽牌数读取BattleState保存的遭遇规则
+	var draw_count:int = battle_state.cards_per_turn;
+	if battle_state.current_turn_number == 1:
+		draw_count = battle_state.prepare_opening_draw();
+	if not action_queue.queue_draw(battle_state,draw_count):
 		push_error("新玩家回合的抽牌行为加入失败");
 		return;
 	
 	if not action_queue.resolve_all():
-		push_error("新玩家回合的抽牌行为执行失败");
+		push_error("新玩家回合的能力与抽牌执行失败");
+		return;
+	if _check_battle_result():# 回合开始失血致死时，队列已中断，不再进入可操作阶段。
 		return;
 	
 	battle_state.current_phase = BattleState.BattlePhase.PLAYER_TURN;
@@ -591,9 +723,9 @@ func _start_player_turn()->void:
 
 ## 执行EnemyState中已经提前准备好的当前敌人行动。
 ##
-## 先验证当前行动，再清除敌人的旧格挡，并将current_action.effects按照原顺序
-## 交给通用效果入队流程。效果结算后检查战斗结果；玩家存活时推进固定行动模式，
-## 准备下一次意图，然后进入新的玩家回合。
+## 先验证当前行动，再按能力清理敌人格挡，排入敌人回合开始能力，然后安排current_action.effects。
+## 效果结算后检查战斗结果；战斗继续时递减双方状态，
+## 推进固定行动模式并准备下一次意图，然后进入新的玩家回合。
 ## 显示和执行始终引用同一个current_action，不从意图文字反推任何战斗规则。
 func _run_enemy_turn()->void:
 	if battle_state == null:
@@ -613,8 +745,9 @@ func _run_enemy_turn()->void:
 		_refresh_battle_view();#保持画面与当前未执行的状态一致
 		return;#不清除格挡、不执行效果，也不推进行动模式
 	
-	battle_state.enemy_state.clear_block();#敌人在自己的回合开始时清除旧格挡
+	battle_state.enemy_state.clear_block_at_turn_start();#敌人使用同一套自动清理规则。
 	action_queue.clear_actions();
+	action_queue.queue_turn_start_powers(battle_state.enemy_state);
 	
 	if not _queue_effect_list(
 		current_enemy_action.effects,
@@ -633,6 +766,10 @@ func _run_enemy_turn()->void:
 	if _check_battle_result():#敌人行动可能在这里让玩家生命归零
 		return;
 
+	# 整轮结束后递减双方状态，再进入下一玩家回合；不在玩家结束回合时提前扣层数。
+	battle_state.player_state.tick_statuses_at_round_end();
+	battle_state.enemy_state.tick_statuses_at_round_end();
+
 	if not battle_state.enemy_state.advance_to_next_action():#只有本次行动完成且玩家存活时才准备下一项意图
 		push_error("敌人行动模式推进失败");#报告EnemyState无法建立下一回合的当前行动
 		_refresh_battle_view();#显示已经结算的生命和格挡，同时保留当前行动便于定位错误
@@ -642,19 +779,23 @@ func _run_enemy_turn()->void:
 
 ## 接收玩家的结束回合请求。
 ##
-## 只有玩家回合中才能结束回合。成功后弃掉剩余手牌，
+## 只有玩家回合中且没有卡牌正在结算时才能结束回合。成功后弃掉未保留手牌，
 ## 将阶段切换为敌人回合，并立即执行EnemyState已经准备好的当前行动。
 func _on_end_turn_button_pressed()->void:
 	if battle_state == null:
 		push_error("尚未创建战斗状态，无法结束回合");
 		return;
 	
-	if battle_state.current_phase != BattleState.BattlePhase.PLAYER_TURN:
+	if (
+		battle_state.current_phase != BattleState.BattlePhase.PLAYER_TURN
+		or battle_state.resolving_card != null
+	):
 		return;
 	
 	if _check_battle_result():
 		return;
 	
 	battle_state.current_phase = BattleState.BattlePhase.ENEMY_TURN;#先切换阶段，阻止继续出牌
-	battle_state.discard_hand();#把玩家没有打出的剩余手牌全部移入弃牌堆
+	battle_state.attack_card_energy_this_turn = 0;# 只持续玩家本回合，在敌人行动前失效。
+	battle_state.discard_hand_at_turn_end();# 保留牌继续留手，其他未打出的牌进入弃牌堆。
 	_run_enemy_turn();

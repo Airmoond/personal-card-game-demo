@@ -27,17 +27,12 @@ signal card_selected(selected_card:CardInstance);
 ## 不应直接修改费用、卡牌效果或所在牌堆。
 var card_instance:CardInstance;
 
-## 用于显示卡牌当前费用。
-@onready var cost_label:Label = $cost_label;
+## 与开局、奖励页共用卡面，外层只负责实例与出牌输入。
+@onready var card_face:CardFace = $card_face;
 
-## 用于显示卡牌名称。
-@onready var name_label:Label = $name_label;
 
-## 用于显示卡牌原画。
-@onready var artwork:TextureRect = $artwork;
-
-## 用于显示卡牌效果说明。
-@onready var description_label:RichTextLabel = $description_label;
+func _ready()->void:
+	custom_minimum_size = card_face.get_combined_minimum_size();
 
 ## 让当前界面开始显示传入的卡牌实例。
 ##
@@ -67,10 +62,15 @@ func refresh_card_view()->void:
 		push_error("当前绑定的卡牌实例无效，卡牌界面刷新失败");
 		return;
 	
-	cost_label.text = str(card_instance.current_energy_cost);
-	name_label.text = card_instance.definition.card_name;
-	artwork.texture = card_instance.definition.artwork;
-	description_label.text = card_instance.definition.description;
+	card_face.show_card(card_instance.definition, card_instance.current_energy_cost);
+	tooltip_text = card_face.tooltip_text;
+
+
+## 显示控制器提供的当前预览文案；视图不读取双方战斗状态或计算伤害。
+func set_description(text:String)->void:
+	card_face.set_description(text);
+	# 子标签穿透鼠标，悬停说明由接收输入的卡牌根节点显示。
+	tooltip_text = card_face.tooltip_text;
 
 
 ## 根据控制器提供的合法性结果切换卡牌可用或不可用的显示外观。
