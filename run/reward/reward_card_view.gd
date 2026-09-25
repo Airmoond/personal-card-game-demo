@@ -49,20 +49,12 @@ func _ready()->void:
 	set_interactable(false);#绑定CardDefinition前保持禁用，并同步显示灰暗外观
 
 
-## 使用一份静态CardDefinition设置当前奖励卡组件。
-func setup(new_card_definition:CardDefinition)->bool:
-	if new_card_definition == null:#空引用无法提供卡牌名称、费用、原画和描述
-		push_error("需要设置的奖励卡牌定义为空");#报告外层奖励页面没有传入实际卡牌资源
-		return false;#在验证通过前不覆盖当前组件原有的card_definition绑定
-	if new_card_definition.is_invalid():#卡牌ID、名称、费用、描述和效果必须完整合法
-		push_error("需要设置的奖励卡牌定义无效");#补充奖励卡View层的错误上下文
-		return false;#非法静态资源不能成为当前奖励卡的显示与点击来源
-	
-	card_definition=new_card_definition;
-	_selection_reported=false;
+## 显示已经通过配置入口验证的候选卡；进入场景树后调用。
+func setup(new_card_definition:CardDefinition)->void:
+	card_definition = new_card_definition;
+	_selection_reported = false;
 	_refresh_visual();
 	set_interactable(false);
-	return true;#静态定义已经成功绑定，界面内容与初始交互状态也已完成刷新
 
 
 ## 根据外层奖励页面的决定设置当前卡牌是否允许选择。
@@ -85,19 +77,8 @@ func set_interactable(enabled:bool)->void:
 	);#通过根节点颜色让背景、文字和原画同步呈现正常或灰暗状态
 
 
-## 根据当前绑定的CardDefinition刷新卡牌显示。
-##
-## 尚未绑定卡牌或当前定义无效时推送错误并立即结束。绑定合法时，将静态定义中的
-## 基础费用、名称、原画和描述分别写入对应界面节点。该方法只更新画面，不创建
-## CardInstance、不执行卡牌效果，也不修改CardDefinition中的任何字段。
+## 候选卡始终显示基础费用和静态说明。
 func _refresh_visual()->void:
-	if card_definition == null:#没有静态定义时无法取得任何可信的卡牌显示数据
-		push_error("尚未绑定奖励卡牌定义，无法刷新奖励卡界面");#报告setup尚未成功完成
-		return;#保持当前界面内容不变
-	if card_definition.is_invalid():#防御性检查当前绑定是否仍满足卡牌静态规则
-		push_error("当前奖励卡牌定义无效，无法刷新奖励卡界面");#补充奖励卡View层的错误上下文
-		return;#非法定义不能覆盖当前显示内容
-
 	card_face.show_card(card_definition, card_definition.base_energy_cost);
 	tooltip_text = card_face.tooltip_text;
 

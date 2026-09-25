@@ -209,7 +209,8 @@ func _test_non_attack_and_reward()->void:
 	_expect(state.enemy_state.current_health == 28, "非攻击伤害读取5格挡但不应用攻击修正");
 	var reward:RewardCardView = load("res://run/reward/reward_card_view.tscn").instantiate();
 	root.add_child(reward);
-	_expect(reward.setup(definition), "动态伤害奖励卡可以绑定");
+	reward.setup(definition);
+	_expect(reward.card_definition == definition, "动态伤害奖励卡可以绑定");
 	_expect(reward.card_face.description_label.text == "造成X点伤害，基础伤害等于当前格挡。", "战斗外显示X和来源说明，不把缺少上下文当成0伤害");
 	reward.queue_free();
 	controller.get_parent().queue_free();

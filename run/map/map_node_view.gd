@@ -77,34 +77,13 @@ func _ready()->void:
 	node_button.disabled = true;#尚未绑定节点和运行时进度前不能报告任何地图选择
 
 
-## 使用一份静态节点定义和一个运行时显示状态设置当前组件。
-##
-## new_node_definition为空或非法，或者new_state不属于NodeState时，推送对应错误、
-## 保持原绑定不变并返回false。全部输入合法时保存只读定义、更新文字与颜色、
-## 重置防重复标记并保持按钮禁用，然后返回true。
-##
-## 该方法应在组件进入场景树、@onready节点引用准备完成后调用。setup不会根据
-## AVAILABLE外观自行开放交互；MapView必须再用RunState.can_enter_node的结果调用
-## set_interactable，从而让显示反馈和最终操作验证保持分层。
-func setup(new_node_definition:MapNodeDefinition,new_state:int)->bool:
-	if new_node_definition == null:#没有静态节点就无法显示名称或报告稳定ID
-		push_error("需要设置的地图节点定义为空");#报告MapView没有传入实际节点资源
-		return false;#验证失败前保持当前组件原有绑定不变
-	if new_node_definition.is_invalid():#节点ID、类型、遭遇或治疗配置必须完整合法
-		push_error("需要设置的地图节点定义无效");#补充地图节点View层的错误上下文
-		return false;#非法静态节点不能成为界面和点击信号的数据来源
-	if not NodeState.values().has(new_state):#防止外部传入枚举范围之外的非法整数
-		push_error("需要设置的地图节点显示状态无效");#报告无法生成对应文字与颜色的状态
-		return false;#未知显示状态不能覆盖当前合法外观
-
-	node_definition = new_node_definition;#保存静态节点的只读引用，供显示名称和点击ID使用
-	@warning_ignore("int_as_enum_without_cast")
-	current_state = new_state;#保存由MapView计算出的运行时显示状态
-	_press_reported = false;#新的设置周期尚未报告过任何玩家点击
-	_refresh_visual();#根据节点名称与当前状态统一更新按钮文字和颜色
-	set_interactable(false);#默认保持禁用，等待MapView传入RunState的最终可进入判断
-
-	return true;#节点定义与显示状态已经成功绑定
+## 接收已验证的节点定义，以及地图页面计算出的显示状态。
+func setup(new_node_definition:MapNodeDefinition,new_state:NodeState)->void:
+	node_definition = new_node_definition;
+	current_state = new_state;
+	_press_reported = false;
+	_refresh_visual();
+	set_interactable(false);
 
 
 ## 根据外部流程计算结果设置当前节点是否允许玩家点击。
@@ -126,10 +105,6 @@ func set_interactable(enabled:bool)->void:
 ## 文字始终读取MapNodeDefinition.display_name，状态说明与颜色由当前界面枚举决定。
 ## 该方法只更新表现，不检查RunState，也不改变按钮最终是否可以交互。
 func _refresh_visual()->void:
-	if node_definition == null:#缺少绑定时没有可信的名称或节点身份可以显示
-		push_error("尚未绑定地图节点定义，无法刷新节点界面");#报告setup调用顺序错误
-		return;#保持当前按钮内容不变
-
 	match current_state:#把外部计算的进度状态翻译为玩家可理解的文字与颜色
 		NodeState.LOCKED:
 			node_button.text = "%s\n[锁定]" % node_definition.display_name;#显示静态名称与锁定反馈

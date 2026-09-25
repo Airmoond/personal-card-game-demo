@@ -95,8 +95,7 @@ func _create_card_instance(definition:CardDefinition)->CardInstance:
 ##
 ## deck_definitions中的每个元素都代表玩家实际拥有的一张卡，因此即使多个元素
 ## 引用同一份CardDefinition，也会分别创建彼此独立的CardInstance。
-## 方法先验证整个输入数组，再进入实例创建阶段，避免在发现后续非法定义前
-## 已经产生部分牌组。
+## 由CardInstance初始化验证每张定义；失败时丢弃局部牌组，不交给战斗状态。
 ##
 ## 数组为空、包含null、包含非法CardDefinition，或任意CardInstance创建失败时，
 ## 推送对应错误并返回空数组。成功时返回元素数量与deck_definitions完全一致的新牌组。
@@ -109,16 +108,7 @@ func _create_deck_from_definitions(
 		push_error("卡牌定义数组为空，无法创建战斗牌组");#报告外部流程没有传入本局实际拥有的卡牌
 		return new_deck;#保持空数组，让战斗初始化统一中止
 
-	for card_index in range(deck_definitions.size()):#第一轮只验证，避免非法后续元素产生半成品牌组
-		var card_definition:CardDefinition = deck_definitions[card_index];#取得当前位置代表的一张实际拥有卡牌
-		if card_definition == null:#空引用无法提供卡牌身份、费用或效果
-			push_error("卡牌定义[%d]为空，无法创建战斗牌组" % card_index);#报告非法元素的准确下标
-			return new_deck;#实例创建尚未开始，因此数组仍然为空
-		if card_definition.is_invalid():#卡牌ID、名称、费用、描述和效果必须完整合法
-			push_error("卡牌定义[%d]无效，无法创建战斗牌组" % card_index);#补充牌组输入中的位置上下文
-			return new_deck;#非法静态资源不能用于创建任何运行时卡牌
-
-	for card_definition in deck_definitions:#全部定义合法后，再按原数组顺序创建每张卡的独立实例
+	for card_definition in deck_definitions:#按原数组顺序创建并验证每张卡的独立实例
 		var card_instance:CardInstance = _create_card_instance(card_definition);#每次循环都会创建一个新CardInstance
 		if card_instance == null:#任意一张卡创建失败都会使整副战斗牌组不完整
 			push_error("战斗牌组中的卡牌实例创建失败");#报告已进入运行时实例创建阶段
@@ -141,7 +131,7 @@ func _create_deck_from_definitions(
 ## 清理旧行为队列、重置结果上报状态、绑定界面并开始第一个玩家回合。
 ##
 ## 成功时返回true。控制器尚未进入场景树，或任意输入、运行时对象创建、
-## BattleState初始化或角色界面绑定失败时，推送对应错误并返回false。
+## BattleState初始化失败时，推送对应错误并返回false。
 ## 该方法不读取或修改RunState，也不修改任何传入的静态Resource。
 ## 调用方必须先把battle.tscn实例加入场景树，再调用本方法。
 func start_battle(
@@ -206,12 +196,8 @@ func start_battle(
 		push_error("战斗状态初始化失败，无法开始战斗");#报告运行时组装未通过BattleState验证
 		return false;#局部半成品不会覆盖控制器当前的battle_state
 
-	if not player_view.bind_combatant_state(new_battle_state.player_state):#使玩家View读取本场新建的玩家状态
-		push_error("玩家界面绑定失败，无法开始战斗");#报告战斗场景与运行时状态的契约不一致
-		return false;#不提交无法完整显示玩家的新战斗
-	if not enemy_view.bind_combatant_state(new_battle_state.enemy_state):#使敌人View读取本场新建的敌人状态
-		push_error("敌人界面绑定失败，无法开始战斗");#报告敌人界面不能正常读取EnemyState
-		return false;#不提交无法完整显示的新战斗
+	player_view.bind_combatant_state(new_battle_state.player_state);
+	enemy_view.bind_combatant_state(new_battle_state.enemy_state);
 
 	action_queue.clear_actions();#全部新数据已组装并绑定成功，现在才放弃上一场的残留行为
 	battle_state = new_battle_state;#全部初始化成功后一次性提交新的唯一战斗状态
@@ -225,13 +211,9 @@ func start_battle(
 ##
 ## 基础数值和次数读取action.effects，攻击预览再计入双方状态，不从intent_text反推规则。
 ## 按效果顺序预览，包括本次行动先施加状态再攻击；仅修改局部预览数值。
-## action为空或非法时推送错误并返回空字符串，让View清除旧意图。
+## 行动定义已经在敌人初始化时验证，显示时直接读取。
 ## 该方法只生成文字，不执行效果，也不修改EnemyActionDefinition资源。
 func _build_enemy_intent_text(action:EnemyActionDefinition)->String:
-	if action == null or action.is_invalid():#只有完整合法的当前行动才能生成可信意图
-		push_error("敌人当前行动无效，无法生成意图文字");#报告运行时敌人缺少可显示行动
-		return "";#空字符串会让CombatantView隐藏旧意图
-
 	var effect_descriptions:PackedStringArray = [];#按照行动效果顺序收集每一项显示说明
 	var block_at_action_start:int = 0;
 	if battle_state.enemy_state.has_power(PowerDefinition.PowerType.RETAIN_BLOCK):
@@ -335,8 +317,6 @@ func _card_is_playable(card:CardInstance)->bool:
 		return false;#设置阶段反馈，但不在View中阻止点击
 	if battle_state.is_victory() or battle_state.is_defeat():#战斗结果产生后所有普通出牌都应停止
 		return false;#结算状态下手牌统一显示为不可使用
-	if card == null or card.is_invalid_instance():#空实例或非法实例不能成为合法出牌对象
-		return false;#拒绝根据损坏数据显示可用状态
 	if not battle_state.hand.has(card):#只有当前真实手牌中的实例才可能被玩家使用
 		return false;#其他牌堆中的卡牌不能显示为可用手牌
 
@@ -370,18 +350,10 @@ func _rebuild_hand()->void:
 		child.queue_free();#在当前帧安全结束后销毁节点，避免立即释放干扰当前流程
 	
 	for card_in_hand in battle_state.hand:#手牌数组中每个CardInstance都要有一个对应View
-		var new_card_view:CardView = CARD_VIEW_SCENE.instantiate() as CardView;#由场景模板创建一份独立UI
-		if new_card_view == null:#场景根节点没有CardView脚本时，as转换会得到null
-			push_error("CardView场景实例化失败");
-			return;
-		
-		hand_area.add_child(new_card_view);#必须先进入场景树，CardView中的@onready引用才会准备完成
-		
-		if not new_card_view.bind_card_instance(card_in_hand):#将这张真实卡牌数据交给新View显示
-			hand_area.remove_child(new_card_view);#绑定失败时清理刚创建的空壳界面
-			new_card_view.queue_free();
-			continue;#只跳过当前无效卡牌，继续尝试显示后面的手牌
-		
+		var new_card_view:CardView = CARD_VIEW_SCENE.instantiate();
+		hand_area.add_child(new_card_view);
+		new_card_view.bind_card_instance(card_in_hand);
+
 		var damage_values:Array[int] = AttackDamageResolver.preview_effect_damage(
 			card_in_hand.definition.effects, battle_state.player_state, battle_state.enemy_state,
 			battle_state.player_state.current_block
@@ -414,108 +386,34 @@ func _rebuild_hand()->void:
 		hand_area.add_child(attack_view);
 
 
-## 将一张卡牌的效果数组交给通用效果入队流程。
-##
-## 玩家是卡牌效果的行动者，当前敌人是行动者的对手。
-## 该方法只验证卡牌入口并传递上下文，不消耗能量、不移动卡牌，也不执行效果。
+## 将已初始化卡牌的效果按顺序入队；纯武器牌的空效果列表自然不产生行为。
 func _queue_card_effect(card:CardInstance)->bool:
-	if battle_state == null:#没有战斗状态时无法取得玩家、敌人和牌堆
-		push_error("尚未创建战斗状态，无法安排卡牌效果");#报告调用时机错误
-		return false;#保持队列和战斗数据不变
-	if card == null or card.is_invalid_instance():#空卡牌或非法实例不能进入效果解释流程
-		push_error("需要安排效果的卡牌实例无效");#报告传入卡牌错误
-		return false;#拒绝安排任何行为
-	if card.definition.card_type == CardDefinition.CardType.WEAPON and card.definition.effects.is_empty():
-		return true;# 武器可以只有装备行为，不必伪造一项附加效果。
-
-	return _queue_effect_list(
-		card.definition.effects,
-		battle_state.player_state,
-		battle_state.enemy_state
-	);#卡牌由玩家使用，因此SELF是玩家，OPPONENT是敌人
+	return _queue_effect_list(card.definition.effects, battle_state.player_state, battle_state.enemy_state);
 
 
-## 验证并按照数组顺序将一组战斗效果加入行为队列。
-##
-## actor_state是效果行动者，opponent_state是行动者的对手。
-## 方法先验证全部效果，再调用_queue_single_effect逐项入队，确保非法的后续效果
-## 不会让前面的部分效果单独留下。任意步骤失败时清空队列并返回false。
-## 该方法不修改效果资源，也不立即执行已经加入的行为。
+## 卡牌和敌人定义在初始化时验证；这里只负责安排执行顺序。
+## 入队失败时清空尚未执行的行为，避免留下部分效果。
 func _queue_effect_list(
 	effects:Array[CombatEffectDefinition],
 	actor_state:CombatantState,
 	opponent_state:CombatantState
 )->bool:
-	if battle_state == null:#抽牌效果和玩家身份判断都需要当前战斗状态
-		push_error("尚未创建战斗状态，无法安排效果列表");#报告缺少通用入队上下文
-		action_queue.clear_actions();#保证失败时没有残留行为
-		return false;#无法安全解释效果列表
-	if actor_state == null:#SELF目标必须能够指向一个实际行动者
-		push_error("效果行动者为空，无法安排效果列表");#报告调用方传入的行动者错误
-		action_queue.clear_actions();#清除可能已经存在的本次行为
-		return false;#缺少行动者时拒绝继续
-	if opponent_state == null:#OPPONENT目标必须能够指向一个实际对手
-		push_error("效果对手为空，无法安排效果列表");#报告调用方传入的对手错误
-		action_queue.clear_actions();#保证失败返回时队列为空
-		return false;#缺少对手时拒绝继续
-	if actor_state == opponent_state:#行动者和对手不能引用同一个角色状态
-		push_error("效果行动者与对手相同，无法安排效果列表");#避免SELF和OPPONENT失去实际区别
-		action_queue.clear_actions();#清除无法正确解释目标的行为
-		return false;#上下文非法时结束
-	if effects.is_empty():#效果列表至少需要包含一项静态效果定义
-		push_error("效果数组为空，无法安排效果列表");#指出静态效果资源存在配置遗漏
-		action_queue.clear_actions();#保持失败后的队列为空
-		return false;#空数组没有可以执行的内容
-
-	for effect_index in range(effects.size()):#第一轮只验证，保证开始入队前全部效果都合法
-		var effect_to_validate:CombatEffectDefinition = effects[effect_index];#取得当前下标对应的效果
-		if effect_to_validate == null:#防止效果数组中存在空资源位置
-			push_error("效果[%d]为空，无法安排效果列表" % effect_index);#报告具体的非法下标
-			action_queue.clear_actions();#保证失败返回时队列为空
-			return false;#不继续解释剩余效果
-		if effect_to_validate.is_invalid():#让效果定义检查自身的类型、目标、数值和次数
-			push_error("效果[%d]无效，无法安排效果列表" % effect_index);#补充效果数组中的位置上下文
-			action_queue.clear_actions();#保证非法列表不会留下待执行行为
-			return false;#全部效果没有通过验证，不能进入第二轮
-
-	for effect_to_queue in effects:#第二轮严格按照资源数组顺序安排全部效果
-		if not _queue_single_effect(effect_to_queue,actor_state,opponent_state):#把一项效果的目标、类型和次数交给单项方法处理
-			action_queue.clear_actions();#撤销列表中此前已经加入但尚未执行的全部行为
-			return false;#任何一项失败都会让整组效果入队失败
-
-	return true;#全部效果均按照设计顺序成功加入队列
+	for effect in effects:
+		if not _queue_single_effect(effect, actor_state, opponent_state):
+			action_queue.clear_actions();
+			return false;
+	return true;
 
 
-## 将一项已经验证的战斗效果转换为一个或多个ActionQueue行为。
-##
-## SELF选择actor_state，OPPONENT选择opponent_state；repeat_count决定加入多少次
-## 独立行为。抽牌、获得能量与武器强化只支持玩家，强化目标取当前装备的武器实例。
-## 该方法不负责清空队列；失败后的整体回滚由_queue_effect_list统一处理。
+## 把一项已验证的效果转换为队列行为；重复次数仍逐段入队。
 func _queue_single_effect(
 	effect:CombatEffectDefinition,
 	actor_state:CombatantState,
 	opponent_state:CombatantState
 )->bool:
-	if battle_state == null:#抽牌行为和玩家身份检查需要当前战斗状态
-		push_error("尚未创建战斗状态，无法安排单项效果");#报告缺少执行上下文
-		return false;#无法安全加入行为
-	if effect == null or effect.is_invalid():#即使被单独调用，也要拒绝空效果或非法配置
-		push_error("需要安排的单项效果无效");#报告传入效果错误
-		return false;#不向队列加入任何新行为
-	if actor_state == null or opponent_state == null:#目标解释需要行动者和对手同时存在
-		push_error("单项效果缺少行动者或对手");#报告调用方传入的角色上下文错误
-		return false;#缺少实际目标时拒绝入队
-	if actor_state == opponent_state:#SELF和OPPONENT必须对应不同角色
-		push_error("单项效果的行动者与对手相同");#报告无法区分目标的上下文
-		return false;#阻止效果作用到错误角色
-
 	var effect_target:CombatantState = actor_state;#SELF默认选择效果行动者自己
 	if effect.target_type == CombatEffectDefinition.TargetType.OPPONENT:#OPPONENT要求切换到行动者的对手
 		effect_target = opponent_state;#保存本项效果的实际角色目标
-
-	if effect.effect_type in [CombatEffectDefinition.EffectType.DRAW, CombatEffectDefinition.EffectType.GAIN_ENERGY, CombatEffectDefinition.EffectType.ENHANCE_WEAPON, CombatEffectDefinition.EffectType.LOSE_HEALTH, CombatEffectDefinition.EffectType.PREVENT_DRAW, CombatEffectDefinition.EffectType.LOSE_MAX_HEALTH, CombatEffectDefinition.EffectType.GAIN_ATTACK_CARD_ENERGY] and actor_state != battle_state.player_state:
-		push_error("此效果仅支持玩家使用");
-		return false;
 
 	for _repeat_index in range(effect.repeat_count):#每次循环都加入一次独立行为，保留多段效果语义
 		var queued_successfully:bool = false;#记录当前这一段效果是否成功进入队列
@@ -635,9 +533,6 @@ func _on_card_selected(selected_card:CardInstance)->void:
 	if battle_state.is_victory() or battle_state.is_defeat():
 		return;#战斗结果已经产生时不再处理卡牌点击
 	
-	if selected_card == null or selected_card.is_invalid_instance():
-		push_error("CardView报告了无效卡牌实例");
-		return;
 	
 	if not battle_state.hand.has(selected_card):
 		push_error("玩家选择的卡牌已经不在手牌中");
@@ -740,10 +635,6 @@ func _run_enemy_turn()->void:
 		return;
 
 	var current_enemy_action:EnemyActionDefinition = battle_state.enemy_state.current_action;#保存本回合将要显示和执行的同一行动引用
-	if current_enemy_action == null or current_enemy_action.is_invalid():#无效行动不能进入部分结算流程
-		push_error("敌人当前行动无效，无法执行敌人回合");#报告EnemyState没有准备好合法意图
-		_refresh_battle_view();#保持画面与当前未执行的状态一致
-		return;#不清除格挡、不执行效果，也不推进行动模式
 	
 	battle_state.enemy_state.clear_block_at_turn_start();#敌人使用同一套自动清理规则。
 	action_queue.clear_actions();
@@ -770,11 +661,8 @@ func _run_enemy_turn()->void:
 	battle_state.player_state.tick_statuses_at_round_end();
 	battle_state.enemy_state.tick_statuses_at_round_end();
 
-	if not battle_state.enemy_state.advance_to_next_action():#只有本次行动完成且玩家存活时才准备下一项意图
-		push_error("敌人行动模式推进失败");#报告EnemyState无法建立下一回合的当前行动
-		_refresh_battle_view();#显示已经结算的生命和格挡，同时保留当前行动便于定位错误
-		return;#模式推进失败时不开始新的玩家回合
-	
+	battle_state.enemy_state.advance_to_next_action();
+
 	_start_player_turn();#玩家回合刷新界面时会显示推进后的新current_action
 
 ## 接收玩家的结束回合请求。

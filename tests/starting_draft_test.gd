@@ -11,6 +11,8 @@ func _initialize()->void:
 func _run()->void:
 	_test_state();
 	_test_configuration();
+	_test_node_progression_and_healing();
+	_test_page_refresh();
 	await _test_paging_and_layout();
 	await _test_complete_adventure();
 	_test_return_and_restart();
@@ -61,6 +63,71 @@ func _test_configuration()->void:
 	print("以下开局缺少传说的配置报错为预期。");
 	_expect(definition.is_invalid(), "空稀有度在配置入口报错");
 	_expect(load("res://run/data/default_run.tres").reward_selection_count == 1, "默认普通奖励仅一次");
+
+
+## 精简状态校验后，仍由真实进度和本局生命上限决定操作结果。
+func _test_node_progression_and_healing()->void:
+	var state:RunState = RunState.new();
+	state.run_state_init(load("res://run/data/default_run.tres"));
+	for id in ["eternity", "war_god_blessing", "battle_trance"]:
+		state.choose_starting_card(_card(id));
+	_expect(not state.enter_node("ruin_guard_boss") and not state.mark_victory(), "未解锁 Boss 不可进入，也不能提前胜利");
+	_expect(state.enter_node("goblin_battle"), "进入已解锁节点");
+	_expect(not state.enter_node("goblin_battle") and not state.enter_node("rest_site"), "处理当前节点期间不能再次进入节点");
+	_expect(state.complete_current_node() and not state.complete_current_node(), "节点只完成一次");
+	_expect(state.available_node_ids == ["rest_site"] and state.completed_node_ids == ["goblin_battle"], "完成节点后只解锁后继，移出当前节点");
+	state.max_health = 49;
+	state.current_health = 47;
+	_expect(state.heal(15) == 2 and state.current_health == 49, "休整治疗遵守血祭改变后的本局上限");
+	_expect(state.heal(15) == 0 and not state.mark_victory(), "满血治疗为0，完成普通节点不能胜利");
+	state.enter_node("rest_site");
+	state.complete_current_node();
+	state.enter_node("ruin_guard_boss");
+	_expect(not state.mark_victory(), "Boss 节点尚未完成时不能胜利");
+	state.complete_current_node();
+	state.current_health = 0;
+	_expect(not state.mark_victory(), "玩家死亡时不能标记胜利");
+	state.current_health = 1;
+	_expect(state.mark_victory() and not state.mark_victory() and not state.mark_defeat(), "胜利只能报告一次，不能反向改为失败");
+	_expect(state.heal(15) == 0 and not state.add_card(_card("strike")) and not state.is_invalid(), "终局不再接受治疗和奖励，局内状态仍完整");
+
+
+## 连续刷新后仍保持节点、连接和候选数量，旧视图不会继续留在容器中。
+func _test_page_refresh()->void:
+	var state:RunState = RunState.new();
+	state.run_state_init(load("res://run/data/default_run.tres"));
+	for id in ["eternity", "war_god_blessing", "battle_trance"]:
+		state.choose_starting_card(_card(id));
+	var map:MapView = load("res://run/map/map_view.tscn").instantiate();
+	root.add_child(map);
+	map.setup(state.definition.map_definition, state);
+	map.refresh_map();
+	map.refresh_map();
+	_expect(map.node_layer.get_child_count() == 3 and map.connection_layer.get_child_count() == 2, "重复刷新地图不叠加节点和连线");
+	var node_selections:Array[String] = [];
+	map.node_selected.connect(func(id:String)->void: node_selections.append(id));
+	var first:MapNodeView = map._node_views["goblin_battle"];
+	first.node_button.pressed.emit();
+	first.node_button.pressed.emit();
+	_expect(node_selections == ["goblin_battle"], "地图刷新后重复点击仍只选择一次");
+	map.queue_free();
+	var reward:RewardView = load("res://run/reward/reward_view.tscn").instantiate();
+	root.add_child(reward);
+	var options:Array[CardDefinition] = [_card("heavy_strike"), _card("double_strike"), _card("battle_trance")];
+	reward.setup(options);
+	reward.refresh_options();
+	reward.refresh_options();
+	_expect(reward.options_container.get_child_count() == 3 and reward.reward_options == options, "奖励刷新不叠加视图、不改变候选");
+	var selections:Array[CardDefinition] = [];
+	reward.reward_selected.connect(func(card:CardDefinition)->void: selections.append(card));
+	reward._reward_card_views[0].pressed.emit();
+	reward.refresh_options();
+	reward._reward_card_views[1].pressed.emit();
+	_expect(selections == [options[0]] and reward._reward_card_views[1].disabled, "已选择的奖励刷新后不能再次领取");
+	reward.setup(options);
+	reward._reward_card_views[1].pressed.emit();
+	_expect(selections == [options[0], options[1]], "绑定新一轮候选后可以重新选择");
+	reward.queue_free();
 
 
 func _test_paging_and_layout()->void:

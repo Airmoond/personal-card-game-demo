@@ -34,34 +34,14 @@ var card_instance:CardInstance;
 func _ready()->void:
 	custom_minimum_size = card_face.get_combined_minimum_size();
 
-## 让当前界面开始显示传入的卡牌实例。
-##
-## new_card_instance为空或实例无效时推送错误，不修改原有绑定，并返回false。
-## 传入有效实例时保存其引用、立即刷新界面，并返回true。
-## 应在当前节点进入场景树、@onready节点引用准备完成后调用。
-func bind_card_instance(new_card_instance:CardInstance)->bool:
-	if new_card_instance == null:
-		push_error("需要绑定的卡牌实例为空，卡牌界面绑定失败");
-		return false;
-	if new_card_instance.is_invalid_instance():
-		push_error("需要绑定的卡牌实例无效，卡牌界面绑定失败");
-		return false;
+## 绑定已经初始化的卡牌实例；进入场景树后调用。
+func bind_card_instance(new_card_instance:CardInstance)->void:
 	card_instance = new_card_instance;
 	refresh_card_view();
-	return true;
-	
-## 根据当前绑定的CardInstance刷新费用、名称、原画和描述。
-##
-## 尚未绑定卡牌实例或当前实例无效时推送错误并立即结束。
-## 该方法只刷新界面，不修改CardInstance或CardDefinition。
+
+
+## 从已绑定的实例刷新费用与卡面，不重新校验静态资源。
 func refresh_card_view()->void:
-	if card_instance == null:
-		push_error("尚未绑定卡牌实例，卡牌界面刷新失败");
-		return;
-	if card_instance.is_invalid_instance():
-		push_error("当前绑定的卡牌实例无效，卡牌界面刷新失败");
-		return;
-	
 	card_face.show_card(card_instance.definition, card_instance.current_energy_cost);
 	tooltip_text = card_face.tooltip_text;
 

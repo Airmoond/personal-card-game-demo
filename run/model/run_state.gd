@@ -149,7 +149,7 @@ func run_state_init(new_definition:RunDefinition)->bool:
 ## 冒险定义为空或非法、状态枚举无效或仍为SETUP、生命越界、实际牌组为空或包含
 ## 非法卡牌，以及当前、可进入、已完成节点不存在、重复或同时出现在多个进度位置时，
 ## 推送对应错误并返回true。进行中或胜利状态下生命为0时也返回true。
-## 所有数据满足第三阶段局内规则时返回false。
+## 供测试和排查问题时完整检查；日常状态操作不重复扫描静态配置。
 ##
 ## owned_cards允许重复保存同一个CardDefinition或card_id，因为每个数组元素代表
 ## 玩家实际拥有的一张卡。该方法只读取并验证状态，不修复数据，也不修改静态资源。
@@ -269,193 +269,63 @@ func can_enter_node(node_id:String)->bool:
 	return available_node_ids.has(node_id);#最后以运行时解锁列表作为是否允许进入的直接依据
 
 
-## 尝试将一个可进入地图节点设为当前正在处理的节点。
-##
-## 当前RunState非法或can_enter_node返回false时保持所有节点进度不变并返回false。
-## 节点合法且可进入时，从available_node_ids中移除该ID，再保存到current_node_id，
-## 然后返回true。移除后可防止同一节点在战斗或休整期间被重复进入。
-##
-## 该方法只提交“开始处理节点”的运行时状态，不启动战斗、不治疗、不完成节点，
-## 也不修改MapNodeDefinition或MapDefinition；后续流程由GameFlowController编排。
+## 进入当前可用节点；移除入口后，同一节点不能被重复进入。
 func enter_node(node_id:String)->bool:
-	if is_invalid():#任何局内数据损坏时都不能继续提交新的地图进度
-		push_error("当前局内状态无效，无法进入地图节点");#补充节点进入阶段的错误上下文
-		return false;#完整验证失败前保持节点数组和当前节点不变
-	if not can_enter_node(node_id):#再次验证状态、当前节点、地图归属、完成记录和解锁状态
-		return false;#锁定、完成、不存在或当前不可进入都属于安全拒绝
-
-	var available_index:int = available_node_ids.find(node_id);#取得目标在可进入数组中的准确位置
-	if available_index < 0:#can_enter_node正常通过时不应发生，保留防御性检查
-		push_error("可进入节点数组中找不到目标节点，进入失败");#报告查询结果与数组状态不一致
-		return false;#未找到目标时不能误删其他节点或设置当前节点
-
-	available_node_ids.remove_at(available_index);#进入后立即移除解锁入口，防止重复点击同一节点
-	current_node_id = node_id;#保存唯一当前节点，供战斗、休整和完成流程共同读取
-
-	return true;#节点进度已经从“可进入”成功切换为“正在处理”
+	if not can_enter_node(node_id):
+		return false;
+	available_node_ids.erase(node_id);
+	current_node_id = node_id;
+	return true;
 
 
-## 尝试完成当前正在处理的地图节点，并解锁它的合法后继节点。
-##
-## 当前RunState非法、整局不处于IN_PROGRESS、没有当前节点或无法取得对应静态节点时，
-## 保持全部地图进度不变并返回false。验证通过后，先在局部数组中记录当前节点并
-## 加入尚未完成、尚未解锁的后继ID，全部准备完成后再提交数组并清空current_node_id。
-##
-## 该方法只完成地图进度的“正在处理→已完成”转换，不发放卡牌、不恢复生命，
-## 也不根据BOSS类型标记整局胜利。调用时机和后续页面由GameFlowController决定。
+## 完成当前节点并解锁后继；地图连接已在冒险初始化时验证。
 func complete_current_node()->bool:
-	if is_invalid():#任何局内数据损坏时都不能继续提交节点完成结果
-		push_error("当前局内状态无效，无法完成地图节点");#补充节点完成阶段的错误上下文
-		return false;#完整验证失败时保持三个地图进度字段不变
-	if status != RunStatus.IN_PROGRESS:#胜利或失败后不能再次完成节点并解锁路线
-		return false;#终局状态下安全拒绝重复结算请求
-	if current_node_id.is_empty():#空字符串表示当前没有正在处理的节点
-		return false;#没有目标时不能产生完成记录或解锁后继
-
-	var current_node:MapNodeDefinition = (
-		definition.map_definition.get_node_by_id(current_node_id)
-	);#通过静态地图的统一查询入口取得当前节点内容
-	if current_node == null:#is_invalid正常通过时不应发生，保留防御性检查
-		push_error("找不到当前地图节点，节点完成失败");#报告运行时ID与静态地图不一致
-		return false;#缺少节点时无法安全读取后继连接
-
-	var next_available_node_ids:Array[String] = available_node_ids.duplicate();#在局部副本中准备新的解锁列表
-	var next_completed_node_ids:Array[String] = completed_node_ids.duplicate();#在局部副本中准备新的完成记录
-	next_completed_node_ids.append(current_node_id);#当前节点通过结算后只记录一次完成状态
-
-	for next_node_id in current_node.next_node_ids:#按照静态地图配置顺序处理全部后继连接
-		if next_completed_node_ids.has(next_node_id):#已经完成的节点不能被重新解锁
-			continue;#汇合路线可能再次指向旧节点，直接保留原完成状态
-		if next_available_node_ids.has(next_node_id):#多个前置节点可能解锁同一个后继节点
-			continue;#已经解锁时不重复追加相同ID
-		if not definition.map_definition.has_node(next_node_id):#合法地图正常不会触发，保留提交前防御检查
-			push_error("后继地图节点不存在，节点完成失败：%s" % next_node_id);#报告损坏的静态连接目标
-			return false;#局部数组尚未提交，失败不会留下部分解锁结果
-
-		next_available_node_ids.append(next_node_id);#保存首次解锁且尚未完成的合法后继节点
-
-	available_node_ids = next_available_node_ids;#提交完整计算后的可进入节点数组
-	completed_node_ids = next_completed_node_ids;#提交包含当前节点的新完成记录
-	current_node_id = "";#当前节点处理结束，返回地图页面后可以进入下一节点
-
-	return true;#地图进度已经成功从当前节点推进到其后继节点
+	if status != RunStatus.IN_PROGRESS or current_node_id.is_empty():
+		return false;
+	var current_node:MapNodeDefinition = definition.map_definition.get_node_by_id(current_node_id);
+	completed_node_ids.append(current_node_id);
+	for next_node_id in current_node.next_node_ids:
+		if not completed_node_ids.has(next_node_id) and not available_node_ids.has(next_node_id):
+			available_node_ids.append(next_node_id);
+	current_node_id = "";
+	return true;
 
 
-## 尝试让玩家在当前冒险中实际拥有一张新的卡牌。
-##
-## 当前RunState非法、整局不处于IN_PROGRESS、card_definition为空或卡牌定义非法时，
-## 保持owned_cards不变并返回false。全部检查通过时，将传入的只读CardDefinition
-## 引用追加一次并返回true。
-##
-## 该方法允许同一个CardDefinition或card_id重复出现，因为每次追加都代表玩家
-## 额外获得了一张同名卡。它不创建CardInstance、不修改卡牌资源，也不要求卡牌
-## 必须来自角色reward_card_pool；奖励候选是否合法由GameFlowController在调用前负责确认。
+## 在冒险进行期间加入一张卡；只验证新加入的定义，不重查整局配置。
 func add_card(card_definition:CardDefinition)->bool:
-	if is_invalid():#损坏的生命、牌组或地图进度不能继续接受新的运行时变化
-		push_error("当前局内状态无效，无法添加卡牌");#补充卡牌成长阶段的错误上下文
-		return false;#完整验证失败时保持owned_cards原有内容不变
-	if status != RunStatus.IN_PROGRESS:#胜利或失败后不能继续改变本局牌组
-		return false;#终局状态下安全拒绝奖励或其他加卡请求
-	if card_definition == null:#空引用无法提供卡牌身份、费用和效果
-		push_error("需要添加的卡牌定义为空");#报告调用方没有传入实际卡牌资源
-		return false;#空卡牌不能进入玩家实际拥有的牌组
-	if card_definition.is_invalid():#新卡的ID、名称、费用和效果必须完整合法
-		push_error("需要添加的卡牌定义无效");#报告无法安全带入后续战斗的静态数据
-		return false;#非法卡牌不能破坏当前已经合法的owned_cards
-
-	owned_cards.append(card_definition);#只追加一份只读资源引用，代表实际获得一张新卡
-	return true;#本局牌组已经成功增加一个CardDefinition元素
+	if status != RunStatus.IN_PROGRESS:
+		return false;
+	if card_definition == null or card_definition.is_invalid():
+		push_error("需要添加的卡牌定义无效");
+		return false;
+	owned_cards.append(card_definition);
+	return true;
 
 
-## 尝试为玩家恢复指定数量的局内当前生命，并返回实际恢复量。
-##
-## 当前RunState非法、整局不处于IN_PROGRESS或amount小于等于0时，保持生命不变
-## 并返回0。参数合法时，实际恢复量取amount与“最大生命减当前生命”中的较小值，
-## 因此治疗不会让current_health超过本局实际最大生命。
-##
-## 该方法只执行通用局内治疗规则，不检查当前节点是否为REST，也不读取或修改
-## MapNodeDefinition.heal_amount；治疗时机和传入数值由GameFlowController负责决定。
+## 恢复局内生命，返回实际治疗量；不能超过本局实际最大生命。
 func heal(amount:int)->int:
-	if is_invalid():#损坏的生命、牌组或地图进度不能继续接受治疗变化
-		push_error("当前局内状态无效，无法恢复生命");#补充局内治疗阶段的错误上下文
-		return 0;#完整验证失败时保持current_health原值不变
-	if status != RunStatus.IN_PROGRESS:#胜利或失败后不再处理普通局内治疗
-		return 0;#终局状态下安全拒绝治疗请求
-	if amount <= 0:#治疗请求必须提供正数基础恢复量
-		push_error("治疗量必须大于0");#报告调用方传入零或负数治疗配置
-		return 0;#非法数值不能改变玩家生命
-
-	var missing_health:int = max_health - current_health;#计算当前距离满生命还缺少多少点
-	if missing_health <= 0:#玩家已经满生命时不存在可以实际恢复的空间
-		return 0;#不修改生命，并明确报告本次实际恢复量为0
-
-	var actual_heal_amount:int = min(amount,missing_health);#治疗量受到剩余生命缺口限制
-	current_health += actual_heal_amount;#只提交已经限制在最大生命以内的实际恢复量
-
-	return actual_heal_amount;#调用方可以使用返回值显示“实际恢复了多少生命”
+	if status != RunStatus.IN_PROGRESS or amount <= 0:
+		return 0;
+	var actual_heal_amount:int = mini(amount, max_health - current_health);
+	current_health += actual_heal_amount;
+	return actual_heal_amount;
 
 
-## 尝试将当前整局冒险标记为胜利状态。
-##
-## 只有整局仍处于IN_PROGRESS、当前没有尚未完成的节点，并且completed_node_ids中
-## 至少包含一个已经完成的BOSS节点时，才尝试切换为VICTORY。候选胜利状态通过
-## is_invalid完整验证后返回true；验证失败时恢复原状态并返回false。
-##
-## 该方法只改变status，不完成节点、不增加卡牌、不修改生命，也不清空地图进度。
-## GameFlowController应当先回写战斗生命并完成Boss节点，再调用本方法。
+## 玩家存活且已完成 Boss 后，结束本局冒险。
 func mark_victory()->bool:
-	if status != RunStatus.IN_PROGRESS:#胜利只能从仍在进行的冒险状态产生
-		return false;#SETUP、VICTORY或DEFEAT都不能重复或反向切换状态
-	if definition == null or definition.map_definition == null:#缺少静态定义时无法确认Boss完成记录
-		push_error("冒险或地图定义为空，无法标记胜利");#报告终局判断缺少唯一静态来源
-		return false;#定义不完整时保持IN_PROGRESS不变
-	if not current_node_id.is_empty():#胜利前必须先完成当前Boss节点并清空当前节点
-		push_error("当前地图节点尚未完成，无法标记胜利");#报告流程控制器调用顺序错误
-		return false;#正在处理节点时不能提前进入胜利结算
-
-	var has_completed_boss:bool = false;#记录完成列表中是否存在可以结束冒险的Boss节点
-	for completed_node_id in completed_node_ids:#逐一检查当前已经完成的静态地图节点
-		var completed_node:MapNodeDefinition = (
-			definition.map_definition.get_node_by_id(completed_node_id)
-		);#通过地图统一查询入口取得完成记录对应的节点定义
-		if completed_node == null:#损坏的完成ID不能作为可信胜利依据
-			push_error("已完成节点不存在，无法标记胜利：%s" % completed_node_id);#报告错误完成记录
-			return false;#保持原状态，避免非法进度进入胜利结算
-		if completed_node.node_type == MapNodeDefinition.NodeType.BOSS:#完成Boss代表达到本阶段整局终点
-			has_completed_boss = true;#记录已经找到合法Boss完成证据
-			break;#一个已完成Boss已经足以满足当前胜利规则
-
-	if not has_completed_boss:#普通战斗或休整完成记录不能产生整局胜利
-		push_error("尚未完成任何Boss节点，无法标记胜利");#报告缺少终局节点完成证据
-		return false;#不允许流程控制器在Boss之前提前结算
-
-	var previous_status:RunStatus = status;#保存原状态，候选终局状态验证失败时用于完整回滚
-	status = RunStatus.VICTORY;#暂存候选胜利状态，让is_invalid验证状态与生命等数据是否一致
-	if is_invalid():#胜利状态要求玩家存活，并且其余牌组和地图进度仍然完整合法
-		status = previous_status;#候选状态非法时恢复调用前的IN_PROGRESS
-		push_error("候选胜利状态验证失败，无法标记整局胜利");#补充终局提交阶段的错误上下文
-		return false;#回滚完成后报告状态切换失败
-
-	return true;#候选状态已经通过完整验证，当前冒险正式进入VICTORY
+	if status != RunStatus.IN_PROGRESS or current_health <= 0 or not current_node_id.is_empty():
+		return false;
+	for completed_node_id in completed_node_ids:
+		var completed_node:MapNodeDefinition = definition.map_definition.get_node_by_id(completed_node_id);
+		if completed_node.node_type == MapNodeDefinition.NodeType.BOSS:
+			status = RunStatus.VICTORY;
+			return true;
+	return false;
 
 
-## 尝试将当前整局冒险标记为失败状态。
-##
-## 只有整局仍处于IN_PROGRESS时才尝试切换为DEFEAT。方法先暂存候选失败状态，
-## 再调用is_invalid验证定义、生命范围、牌组和地图进度；验证失败时恢复原状态。
-## 成功时返回true，重复失败、胜利后失败或未初始化状态均返回false。
-##
-## DEFEAT允许current_health为0，也允许保留current_node_id，用于记录玩家在哪个节点
-## 失败。该方法只改变status，不完成失败节点，也不清空牌组、生命或地图进度。
+## 标记本局失败，保留失败节点和牌组供结算读取。
 func mark_defeat()->bool:
-	if status != RunStatus.IN_PROGRESS:#失败只能从仍在进行的冒险状态产生
-		return false;#SETUP、VICTORY或DEFEAT都不能重复或反向切换状态
-
-	var previous_status:RunStatus = status;#保存原状态，候选失败状态验证失败时用于回滚
-	status = RunStatus.DEFEAT;#先暂存候选状态，使0生命能够按照合法终局数据接受验证
-	if is_invalid():#失败状态仍然要求定义、生命范围、牌组和地图进度完整合法
-		status = previous_status;#候选状态非法时恢复调用前的IN_PROGRESS
-		push_error("候选失败状态验证失败，无法标记整局失败");#补充终局提交阶段的错误上下文
-		return false;#回滚完成后报告状态切换失败
-
-	return true;#候选状态已经通过完整验证，当前冒险正式进入DEFEAT
+	if status != RunStatus.IN_PROGRESS:
+		return false;
+	status = RunStatus.DEFEAT;
+	return true;

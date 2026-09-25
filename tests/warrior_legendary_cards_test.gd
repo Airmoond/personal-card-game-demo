@@ -195,14 +195,16 @@ func _test_card_text()->void:
 		var definition:CardDefinition = _card(id);
 		var reward:RewardCardView = load("res://run/reward/reward_card_view.tscn").instantiate();
 		root.add_child(reward);
-		_expect(reward.setup(definition), "传说卡可由候选卡组件显示");
+		reward.setup(definition);
+		_expect(reward.card_definition == definition, "传说卡可由候选卡组件显示");
 		views.append(reward);
 		var hand:CardView = load("res://cards/card_view.tscn").instantiate();
 		hand.size = Vector2(140, 200);
 		root.add_child(hand);
 		var instance:CardInstance = CardInstance.new();
 		instance.card_instance_init(definition);
-		_expect(hand.bind_card_instance(instance), "传说卡可显示为手牌");
+		hand.bind_card_instance(instance);
+		_expect(hand.card_instance == instance, "传说卡可显示为手牌");
 		views.append(hand);
 	await process_frame;
 	await process_frame;

@@ -125,6 +125,7 @@ func _test_target_and_damage_category()->void:
 func _test_reward_description()->void:
 	var view:RewardCardView = load("res://run/reward/reward_card_view.tscn").instantiate();
 	root.add_child(view);
-	_expect(view.setup(load("res://cards/data/attack_and_block.tres")), "奖励卡应正常绑定");
+	view.setup(load("res://cards/data/attack_and_block.tres"));
+	_expect(view.card_definition == load("res://cards/data/attack_and_block.tres"), "奖励卡应正常绑定");
 	_expect(view.card_face.description_label.text == "获得3点格挡，然后造成4点伤害", "奖励页使用基础伤害且不显示占位符");
 	view.queue_free();

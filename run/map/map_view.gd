@@ -77,77 +77,27 @@ var _selection_reported:bool = false
 @onready var deck_label:Label = $top_bar/deck_label
 
 
-## 使用一份静态地图及其对应的局内状态设置当前地图页面。
-##
-## 地图或RunState为空、任意一方非法，或者RunState引用的地图与传入地图不是
-## 同一份资源时，推送对应错误并返回false。输入合法时保存只读引用、重置选择状态，
-## 再调用refresh_map创建完整页面；刷新失败时清理绑定并返回false。
-##
-## 该方法应在页面进入场景树、@onready节点引用准备完成后调用。
+## 绑定已初始化的冒险与地图，确认二者属于同一局后显示。
 func setup(new_map_definition:MapDefinition,new_run_state:RunState)->bool:
-	if new_map_definition == null:#没有静态地图就无法确定节点、位置和连接
-		push_error("需要显示的地图定义为空");#报告流程控制器没有传入实际地图资源
-		return false;#验证失败前保持当前页面原有绑定不变
-	if new_map_definition.is_invalid():#地图ID、节点、起点、连接和可达性必须完整合法
-		push_error("需要显示的地图定义无效");#补充地图View层的错误上下文
-		return false;#非法地图不能成为界面生成的数据来源
-	if new_run_state == null:#没有局内状态就无法确定生命、牌组和节点进度
-		push_error("需要显示的局内状态为空");#报告流程控制器缺少本局唯一状态对象
-		return false;#空状态不能用于计算任何节点外观或交互
-	if new_run_state.is_invalid():#只允许完整合法的局内状态进入地图显示流程
-		push_error("需要显示的局内状态无效");#补充地图页面设置阶段的错误上下文
-		return false;#损坏状态不能生成可能误导玩家的地图界面
-	if new_run_state.definition.map_definition != new_map_definition:#显示与进度必须引用同一份静态地图
-		push_error("局内状态使用的地图与需要显示的地图不一致");#报告两个地图真相源发生冲突
-		return false;#拒绝把一张地图的进度显示到另一张地图上
-
-	map_definition = new_map_definition;#保存静态地图的只读引用，供节点和连接生成使用
-	run_state = new_run_state;#保存局内状态引用，但只通过查询读取其当前数据
-	_selection_reported = false;#新的页面设置周期尚未报告过任何节点选择
-
-	if not refresh_map():#根据已经验证的数据生成顶部信息、节点和连接线
-		_clear_dynamic_content();#刷新失败时移除可能创建出的部分界面节点
-		map_definition = null;#清除未能成功显示的静态地图绑定
-		run_state = null;#清除未能成功显示的局内状态绑定
-		push_error("地图页面刷新失败，设置没有完成");#报告界面生成阶段失败
-		return false;#不把半成品地图页面交给流程控制器使用
-
-	return true;#静态地图与局内进度已经完整显示
+	if new_map_definition == null or new_run_state == null:
+		push_error("地图页面缺少地图定义或局内状态");
+		return false;
+	if new_run_state.definition.map_definition != new_map_definition:
+		push_error("局内状态与需要显示的地图不一致");
+		return false;
+	map_definition = new_map_definition;
+	run_state = new_run_state;
+	refresh_map();
+	return true;
 
 
-## 根据当前绑定的MapDefinition和RunState完整重建地图页面。
-##
-## 方法先验证绑定，清理旧节点与连接，更新生命和牌组信息，再创建全部MapNodeView
-## 及Line2D连接。任意动态实例创建或设置失败时清理半成品并返回false；成功时返回true。
-##
-## 该方法只重建显示节点，不修改RunState或任何静态Resource。整页重建会丢弃旧组件
-## 的悬停等临时外观，但能简单可靠地保证画面与当前运行时进度一致。
-func refresh_map()->bool:
-	if map_definition == null:#缺少静态地图时无法重新创建节点和连接
-		push_error("尚未绑定地图定义，无法刷新地图页面");#报告setup尚未成功完成
-		return false;#保持现有页面内容不变
-	if run_state == null:#缺少局内状态时无法计算进度和顶部信息
-		push_error("尚未绑定局内状态，无法刷新地图页面");#报告页面缺少唯一运行时数据源
-		return false;#没有数据时不能生成可信界面
-	if map_definition.is_invalid() or run_state.is_invalid():#刷新前再次防御性验证两个数据来源
-		push_error("地图定义或局内状态无效，无法刷新地图页面");#报告绑定数据在刷新前已经损坏
-		return false;#非法数据不能覆盖当前界面
-	if run_state.definition.map_definition != map_definition:#防止绑定后出现地图引用不一致
-		push_error("局内状态与当前地图定义不一致，无法刷新地图页面");#报告显示来源发生冲突
-		return false;#不允许把错误进度继续显示到当前页面
-
-	_clear_dynamic_content();#验证通过后再清理旧动态内容，避免失败时无故清空页面
-	_selection_reported = false;#完整刷新代表开始一个新的地图交互周期
-	_refresh_run_info();#顶部信息始终从当前RunState重新读取
-
-	if not _create_node_views():#先创建全部节点组件，供随后连接线查询中心位置
-		_clear_dynamic_content();#实例化或设置失败时移除已经产生的部分节点
-		return false;#半成品节点集合不能继续创建连接或接收输入
-	if not _create_connection_lines():#节点全部存在后再根据静态next_node_ids生成连线
-		_clear_dynamic_content();#连接失败时清理节点与已创建的部分线段
-		return false;#不显示结构不完整的地图
-
-	return true;#顶部信息、节点外观、交互状态和连接线均已完整建立
+## 从已绑定的状态重建地图；静态地图在冒险初始化时验证。
+func refresh_map()->void:
+	_clear_dynamic_content();
+	_selection_reported = false;
+	_refresh_run_info();
+	_create_node_views();
+	_create_connection_lines();
 
 
 ## 清理当前页面中此前动态创建的全部连接线和地图节点组件。
@@ -176,40 +126,23 @@ func _refresh_run_info()->void:
 	deck_label.text = "牌组：%d张" % run_state.owned_cards.size();#每个CardDefinition元素代表实际拥有的一张卡
 
 
-## 为静态地图中的每个节点创建、设置并保存一个MapNodeView。
-##
-## 全部组件先加入node_layer以完成@onready，再调用setup、设置静态坐标、连接点击信号，
-## 并用RunState.can_enter_node设置最终交互权限。任意步骤失败时返回false。
-func _create_node_views()->bool:
-	for node_definition in map_definition.nodes:#按照静态资源数组顺序创建全部地图节点组件
-		var new_node_view:MapNodeView = MAP_NODE_VIEW_SCENE.instantiate() as MapNodeView;#由统一场景模板创建独立View
-		if new_node_view == null:#场景根节点没有挂载MapNodeView脚本时类型转换会失败
-			push_error("MapNodeView场景实例化失败");#报告模板场景与脚本契约不一致
-			return false;#缺少任何一个节点组件时整张地图都不完整
-
-		node_layer.add_child(new_node_view);#必须先进入场景树，内部@onready node_button才会准备完成
-		new_node_view.position = node_definition.map_position;#静态坐标表示组件左上角位置，不写回资源
-
-		var visual_state:int = _get_node_visual_state(node_definition.node_id);#根据运行时进度计算显示状态
-		if not new_node_view.setup(node_definition,visual_state):#绑定静态定义并刷新节点文字与颜色
-			node_layer.remove_child(new_node_view);#设置失败时先从场景树移除当前半成品组件
-			new_node_view.queue_free();#安全释放无法使用的节点View
-			return false;#任意节点设置失败都会终止整页生成
-
-		new_node_view.pressed.connect(_on_map_node_pressed);#节点点击先回到MapView进行页面级二次验证
-		new_node_view.set_interactable(
-			run_state.can_enter_node(node_definition.node_id)
-		);#最终按钮权限只使用RunState的真实查询结果
-		_node_views[node_definition.node_id] = new_node_view;#保存View映射供连接线和统一禁用使用
-
-	return true;#全部静态节点都已经拥有对应的运行时界面组件
+## 为每个配置节点建立对应界面。
+func _create_node_views()->void:
+	for node_definition in map_definition.nodes:
+		var view:MapNodeView = MAP_NODE_VIEW_SCENE.instantiate();
+		node_layer.add_child(view);
+		view.position = node_definition.map_position;
+		view.setup(node_definition, _get_node_visual_state(node_definition.node_id));
+		view.pressed.connect(_on_map_node_pressed);
+		view.set_interactable(run_state.can_enter_node(node_definition.node_id));
+		_node_views[node_definition.node_id] = view;
 
 
 ## 根据当前RunState取得一个节点应当显示的NodeState。
 ##
 ## 已完成节点优先返回COMPLETED，已解锁节点返回AVAILABLE，其余返回LOCKED。
 ## 该方法只计算外观；最终按钮权限仍由RunState.can_enter_node决定。
-func _get_node_visual_state(node_id:String)->int:
+func _get_node_visual_state(node_id:String)->MapNodeView.NodeState:
 	if run_state.completed_node_ids.has(node_id):#完成记录优先于其他显示状态
 		return MapNodeView.NodeState.COMPLETED;#已完成节点需要保留可见但不能再次进入
 	if run_state.available_node_ids.has(node_id):#解锁数组表示节点已经具备可进入外观
@@ -217,35 +150,19 @@ func _get_node_visual_state(node_id:String)->int:
 	return MapNodeView.NodeState.LOCKED;#未完成且未解锁的节点统一显示为锁定
 
 
-## 根据MapDefinition中的next_node_ids创建全部静态连接线。
-##
-## 每条连接使用两个MapNodeView的中心点作为端点，并加入connection_layer，
-## 从而显示在node_layer中的按钮下方。找不到任一端点时推送错误并返回false。
-func _create_connection_lines()->bool:
-	for source_definition in map_definition.nodes:#每个静态节点都可能声明零个或多个后继连接
-		var source_view:MapNodeView = _node_views.get(source_definition.node_id) as MapNodeView;#取得连接起点View
-		if source_view == null:#节点创建成功时正常不会发生，保留防御性检查
-			push_error("找不到连接起点的地图节点界面：%s" % source_definition.node_id);#报告缺失起点
-			return false;#缺少端点时无法绘制可信连接
-
-		for target_node_id in source_definition.next_node_ids:#按照静态配置顺序创建当前节点的全部出边
-			var target_view:MapNodeView = _node_views.get(target_node_id) as MapNodeView;#取得连接终点View
-			if target_view == null:#合法地图与完整节点集合正常不会触发
-				push_error("找不到连接终点的地图节点界面：%s" % target_node_id);#报告缺失目标
-				return false;#连接端点不完整时停止整页生成
-
-			var connection_line:Line2D = Line2D.new();#每项静态连接使用一个独立Line2D显示
-			connection_line.name = "connection_%s_to_%s" % [
-				source_definition.node_id,
-				target_node_id
-			];#使用稳定ID生成便于调试的运行时节点名称
-			connection_line.width = CONNECTION_WIDTH;#统一所有地图连接的线条粗细
-			connection_line.default_color = CONNECTION_COLOR;#统一使用不抢夺节点视觉重点的灰白色
-			connection_line.add_point(_get_node_view_center(source_view));#连接起点位于来源按钮中心
-			connection_line.add_point(_get_node_view_center(target_view));#连接终点位于目标按钮中心
-			connection_layer.add_child(connection_line);#连接层位于节点层下方，因此线条不会覆盖按钮
-
-	return true;#全部静态连接都已经转换为可见Line2D
+## 节点界面创建完成后，按已经验证的地图连接绘制路线。
+func _create_connection_lines()->void:
+	for source in map_definition.nodes:
+		var source_view:MapNodeView = _node_views[source.node_id];
+		for target_node_id in source.next_node_ids:
+			var target_view:MapNodeView = _node_views[target_node_id];
+			var line:Line2D = Line2D.new();
+			line.name = "connection_%s_to_%s" % [source.node_id, target_node_id];
+			line.width = CONNECTION_WIDTH;
+			line.default_color = CONNECTION_COLOR;
+			line.add_point(_get_node_view_center(source_view));
+			line.add_point(_get_node_view_center(target_view));
+			connection_layer.add_child(line);
 
 
 ## 计算一个MapNodeView在MapView局部坐标中的中心位置。
@@ -274,9 +191,7 @@ func _on_map_node_pressed(node_id:String)->void:
 		return;#锁定、完成或不存在的节点不能进入流程层
 
 	_selection_reported = true;#先提交页面级防重复状态，阻止不同按钮的连续输入
-	for node_view_value in _node_views.values():#统一禁用当前页面创建的全部地图节点组件
-		var node_view:MapNodeView = node_view_value as MapNodeView;#从Dictionary的Variant值恢复具体类型
-		if node_view != null:#防御性忽略损坏映射中的非MapNodeView值
-			node_view.set_interactable(false);#等待GameFlowController处理选择并替换当前页面
+	for node_view:MapNodeView in _node_views.values():
+		node_view.set_interactable(false);
 
 	node_selected.emit(node_id);#只报告稳定ID，由流程控制器调用RunState.enter_node并切换流程
